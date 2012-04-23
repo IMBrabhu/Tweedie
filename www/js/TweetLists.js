@@ -20,10 +20,11 @@ var TweetLists = Class(
   createDefaultList: function()
   {
     var main = new FilteredTweetsModel({ account: this._account, title: "Main", canRemove: false, name: "main", uuid: "00000000-0000-0000-0000-000000000001" });
-    var photos = new FilteredTweetsModel({ account:  this._account, title: "Media", canRemove: false, uuid: "00000000-0000-0000-0000-000000000002", viz: "media" });
-    var fav = new FilteredTweetsModel({ account:  this._account, title: "Favorites", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000003" });
-    var dms = new FilteredTweetsModel({ account:  this._account, title: "Messages", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000004", viz: "stack" });
-    var mentions = new FilteredTweetsModel({ account:  this._account, title: "Mentions", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000005" });
+    var photos = new FilteredTweetsModel({ account: this._account, title: "Media", canRemove: false, uuid: "00000000-0000-0000-0000-000000000002", viz: "media" });
+    var fav = new FilteredTweetsModel({ account: this._account, title: "Favorites", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000003" });
+    var dms = new FilteredTweetsModel({ account: this._account, title: "Messages", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000004", viz: "stack" });
+    var mentions = new FilteredTweetsModel({ account: this._account, title: "Mentions", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000005" });
+    var retweeteds = new FilteredTweetsModel({ account: this._account, title: "Retweeted", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000006" });
 
     main.addIncludeTag(Tweet.TweetTag);
     main.addIncludeTag(Tweet.RetweetTag);
@@ -33,15 +34,17 @@ var TweetLists = Class(
     fav.addIncludeTag(Tweet.FavoriteTag);
     dms.addIncludeTag(Tweet.DMTag);
     mentions.addIncludeTag(Tweet.MentionTag);
+    retweeteds.addIncludeTag(Tweet.RetweetedTag);
 
     this.lists = new ModelSet({
       models:
       [
         main,
         mentions,
+        retweeteds,
         fav,
         dms,
-        photos
+        photos,
       ]
     });
   },
@@ -161,30 +164,46 @@ var TweetLists = Class(
     var include = [];
     var exclude = [];
     var urls = [];
-    var lastid = null;
+    var tweet = null;
     tweets.forEach(function(twt)
     {
       var id = twt.id_str;
-      var tweet = this.getTweet(id);
-      if (!tweet && id !== lastid)
+      var ntweet = this.getTweet(id);
+      if (!ntweet)
       {
-        lastid = id;
-        tweet = new Tweet(twt, this._account, true);
-        if (tweet.is_retweet())
+        if (tweet && id === tweet.id())
         {
-          urls = urls.concat(tweet.retweet().urls());
+          if (twt.retweeted_of_me)
+          {
+            tweet.retweeted_of_me(true);
+          }
         }
         else
         {
-          urls = urls.concat(tweet.urls());
+          tweet = new Tweet(twt, this._account, true);
+          lasttweet = tweet;
+          if (tweet.is_retweet())
+          {
+            urls = urls.concat(tweet.retweet().urls());
+          }
+          else
+          {
+            urls = urls.concat(tweet.urls());
+          }
+          include.push(tweet);
+          all.push(tweet);
         }
-        include.push(tweet);
       }
       else
       {
+        tweet = ntweet;
+        if (twt.retweeted_of_me)
+        {
+          tweet.retweeted_of_me(true);
+        }
         exclude.push(tweet);
+        all.push(tweet);
       }
-      all.push(tweet);
     }, this);
     return { all: all, include: include, exclude: exclude, urls: urls };
   },

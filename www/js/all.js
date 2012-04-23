@@ -9707,15 +9707,19 @@ var KEYS =
     oauth_consumer_key: "wFdo3SPtTYOAHgjoizKpug",
     oauth_consumer_secret: "DtWtTnewJLINEmnshVG47lyivxlyeDD68h2w6LqotY",
     callback: location.protocol === "file:" ? "http://aanon4.github.com/callback/" : location.origin + "/callback",
-    Xcallback: "http://aanon4.github.com/callback/",
   },
   twitterResolve:
   {
     "X-PHX": true
   },
-  embedly: "bca772cc366611e1b6634040d3dc5c07",
   ga: "UA-28788100-1"
 };
+
+if (!xo.Environment.isTouch())
+{
+  KEYS.twitter.oauth_consumer_key = "kdL4SnvW5p1ZMJyUW6ukA";
+  KEYS.twitter.oauth_consumer_secret = "GdtvGSATXv2N5k4kGIviECvxdHDMYEa9OstyaVxnpY";
+}
 var Co = xo.Co;
 var Class = xo.Class;
 var Log = xo.Log;
@@ -10110,8 +10114,7 @@ var Tweet = Model.create(
       Co.Routine(this,
         function()
         {
-          return Composite.mergeIcons(this._values.recipient.profile_image_url, this._values.sender.profile_image_url, 48, 32, 5);
-          return Composite.mergeIcons("http://api.twitter.com/1/users/profile_image/" + this._values.receipient.screen_name + Tweet.profileImgExt, "http://api.twitter.com/1/users/profile_image/" + this._values.sender.screen_name + Tweet.profileImgExt, 48, 32, 5);
+          return Composite.mergeIcons("http://api.twitter.com/1/users/profile_image/" + this._values.recipient.screen_name + Tweet.profileImgExt, "http://api.twitter.com/1/users/profile_image/" + this._values.sender.screen_name + Tweet.profileImgExt, 48, 32, 5);
         },
         function(url)
         {
@@ -11468,13 +11471,18 @@ var TweetFetcher = xo.Class(Events,
     this._loop = this._runUserStreamer();
     var loop = this._loop;
     var running;
-    var tweets;
-    var tweetId = "1";
-    var mentionId = "1";
-    var favId = "1";
-    var dmSendId = "1";
-    var dmRecvId = "1";
-    var failed;
+
+    var status =
+    {
+      tweets: null,
+      failed: null,
+      tweetId: "1",
+      mentionId: "1",
+      favId: "1",
+      dmSendId: "1",
+      dmRecvId: "1",
+    };
+
     Co.Forever(this,
       function()
       {
@@ -11483,12 +11491,54 @@ var TweetFetcher = xo.Class(Events,
           return Co.Break();
         }
 
-        failed = [];
-        tweets = [];
+        status.failed = [];
+        status.tweets = [];
 
         this.emit("fetchStatus", []);
         this.emit("networkActivity", true);
 
+        return this._fetchTweets(status)
+      },
+      function()
+      {
+        return status.failed.length ? true : this._fetchFavorites(status);
+      },
+      function()
+      {
+        return status.failed.length ? true : this._fetchMentions(status);
+      },
+      function()
+      {
+        return status.failed.length ? true : this._fetchDMs(status);
+      },
+      function()
+      {
+        this.emit("networkActivity", false);
+
+        Log.time("TweetSort");
+        status.tweets.sort(Tweet.compareRawTweets);
+        Log.timeEnd("TweetSort");
+        Log.time("TweetLoad");
+        this.emit("tweets", status.tweets);
+        Log.timeEnd("TweetLoad");
+
+        this.emit("fetchStatus", status.failed);
+
+        if (!running && !status.failed.length)
+        {
+          running = true;
+          loop.run();
+        }
+        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 600 : 120);
+      }
+    );
+  },
+
+  _fetchTweets: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
         var lists = this._account.tweetLists;
         return Co.Loop(this, 4,
           function(page)
@@ -11496,15 +11546,15 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&count=200&page=" + (1 + page()) + "&since_id=" + tweetId,
+              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
               auth: this._auth
             });
           },
           function(r)
           {
             var ntweets = r().json();
-            tweets = tweets.concat(ntweets);
-            if (!ntweets.length)
+            s.tweets = s.tweets.concat(ntweets);
+            if (ntweets.length < 100) // Bit of a guess on when to stop
             {
               return Co.Break();
             }
@@ -11524,21 +11574,30 @@ var TweetFetcher = xo.Class(Events,
         try
         {
           r();
-          if (tweets.length)
+          if (s.tweets.length)
           {
-            tweetId = tweets[0].id_str;
+            s.tweetId = s.tweets[0].id_str;
           }
         }
         catch (e)
         {
-          failed.push({ op: "fetch", type: "fetch-tweet" });
+          s.failed.push({ op: "fetch", type: "fetch-tweet" });
           Log.exception("Tweet fetch failed", e);
         }
+        return true;
+      }
+    );
+  },
 
+  _fetchFavorites: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/favorites.json?include_entities=true&count=200&since_id=" + favId,
+          url: "https://api.twitter.com/1/favorites.json?include_entities=true&count=200&since_id=" + s.favId,
           auth: this._auth
         });
       },
@@ -11549,20 +11608,29 @@ var TweetFetcher = xo.Class(Events,
           var json = r().json();
           if (json.length)
           {
-            favId = json[0].id_str;
+            s.favId = json[0].id_str;
           }
-          tweets = tweets.concat(json);
+          s.tweets = s.tweets.concat(json);
         }
         catch (e)
         {
-          failed.push({ op: "fetch", type: "fetch-favorite" });
+          s.failed.push({ op: "fetch", type: "fetch-favorite" });
           Log.exception("Fav fetch failed", e);
         }
+        return true;
+      }
+    );
+  },
 
+  _fetchMentions: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=true&count=200&since_id=" + mentionId,
+          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=true&count=200&since_id=" + s.mentionId,
           auth: this._auth
         });
       },
@@ -11573,23 +11641,32 @@ var TweetFetcher = xo.Class(Events,
           var json = r().json();
           if (json.length)
           {
-            mentionId = json[0].id_str;
+            s.mentionId = json[0].id_str;
           }
-          tweets = tweets.concat(json);
+          s.tweets = s.tweets.concat(json);
         }
         catch (e)
         {
-          failed.push({ op: "fetch", type: "fetch-mention" });
+          s.failed.push({ op: "fetch", type: "fetch-mention" });
           Log.exception("Mentions fetch failed", e);
         }
+        return true;
+      }
+    );
+  },
 
+  _fetchDMs: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
         return Co.Parallel(this,
           function()
           {
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages.json?include_entities=true&count=100&since_id=" + dmRecvId,
+              url: "https://api.twitter.com/1/direct_messages.json?include_entities=true&count=100&since_id=" + s.dmRecvId,
               auth: this._auth
             });
           },
@@ -11598,7 +11675,7 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=true&count=100&since_id=" + dmSendId,
+              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=true&count=100&since_id=" + s.dmSendId,
               auth: this._auth
             });
           }
@@ -11613,37 +11690,20 @@ var TweetFetcher = xo.Class(Events,
           var send = r[1].json();
           if (recv.length)
           {
-            dmRecvId = recv[0].id_str;
+            s.dmRecvId = recv[0].id_str;
           }
           if (send.length)
           {
-            dmSendId = send[0].id_str;
+            s.dmSendId = send[0].id_str;
           }
-          tweets = tweets.concat(recv, send);
+          s.tweets = s.tweets.concat(recv, send);
         }
         catch (e)
         {
-          failed.push({ op: "fetch", type: "fetch-dm" });
+          s.failed.push({ op: "fetch", type: "fetch-dm" });
           Log.exception("DM fetch failed", e);
         }
-
-        this.emit("networkActivity", false);
-
-        Log.time("TweetSort");
-        tweets.sort(Tweet.compareRawTweets);
-        Log.timeEnd("TweetSort");
-        Log.time("TweetLoad");
-        this.emit("tweets", tweets);
-        Log.timeEnd("TweetLoad");
-
-        this.emit("fetchStatus", failed);
-
-        if (!running && !failed.length)
-        {
-          running = true;
-          loop.run();
-        }
-        return Co.Sleep(failed.length === 0 && loop.pushRunning ? 300 : Math.max(failed.length * 60, 120));
+        return true;
       }
     );
   },
@@ -12648,7 +12708,7 @@ var Errors = Model.create(
     {
       this._lgrid.write("/errors", this._errors.map(function(error)
       {
-        return { op: error.op, type: error.type, details: error.details ? error.details.serialize() : null };
+        return { op: error.op, type: error.type, details: error.details.serialize  ? error.details.serialize() : null };
       }));
     }
     catch (e)
@@ -13239,34 +13299,89 @@ new StorageGridProvider(
           {
             method: "POST",
             url: "http://www.readability.com/articles/queue",
-            data: "read=1&url=" + url,
+            parameters:
+            {
+              url: url
+            },
             _gridPath: path
           };
           return Ajax.create(pending);
         },
         function(r)
         {
+          var text;
           try
           {
             pending = null;
-            stage.innerHTML = r().text();
+            text = r().text();
+            // Remove any iframes (primitive)
+            text = text.replace(/<iframe.*?>.*?<\/iframe>/ig, "");
+            stage.innerHTML = text;
             model.delayUpdate(function()
             {
               this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
               this.text(stage.querySelector("#rdb-article-content").innerHTML);
             });
+            return;
           }
           catch (e)
           {
-            Log.exception("Readability failure", e);
-            model.delayUpdate(function()
-            {
-              this.title("Failed");
-              this.text(url);
-              this.error(true);
-            });
-            lgrid.remove(path);
+            // Failed - maybe the Readability selection page - look for the id inside it
           }
+
+          var s = text.indexOf("articleId");
+          if (s === -1)
+          {
+            throw e;
+          }
+
+          var articleId = eval(text.slice(s, text.indexOf(",", s)));
+          if (!articleId)
+          {
+            throw Error();
+          }
+          return Co.Routine(this,
+            function()
+            {
+              // Refetch the page explicityly.  We set the readbar which forces Readability to
+              // return the condensed version of the page.
+              pending =
+              {
+                method: "GET",
+                url: "http://www.readability.com/articles/" + articleId,
+                parameters:
+                {
+                  readbar: 1
+                },
+                _gridPath: path
+              };
+              return Ajax.create(pending);
+            },
+            function(r)
+            {
+              pending = null;
+              text = r().text();
+              // Remove any iframes (primitive)
+              text = text.replace(/<iframe.*?>.*?<\/iframe>/ig, "");
+              stage.innerHTML = text;
+              model.delayUpdate(function()
+              {
+                this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
+                this.text(stage.querySelector("#rdb-article-content").innerHTML);
+              });
+            }
+          );
+        },
+        function(_)
+        {   
+          Log.exception("Readability failure");
+          model.delayUpdate(function()
+          {
+            this.title("Failed");
+            this.text(url);
+            this.error(true);
+          });
+          lgrid.remove(path);
         }
       );
     }

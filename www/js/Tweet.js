@@ -3,6 +3,7 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
+  retweeted_of_me: Model.Property,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -33,6 +34,7 @@ var Tweet = Model.create(
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
       favorited: values.favorited,
+      retweeted_of_me: values.retweeted_of_me,
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
@@ -650,6 +652,11 @@ var Tweet = Model.create(
         used[Tweet.FavoriteTag.hashkey] = true;
         tags.push(Tweet.FavoriteTag);
       }
+      if (this.retweeted_of_me())
+      {
+        used[Tweet.RetweetedTag.hashkey] = true;
+        tags.push(Tweet.RetweetedTag);
+      }
       var u = this._values.user || this._values.sender;
       if (u && u.lang && u.lang !== Tweet.language)
       {
@@ -787,6 +794,7 @@ var Tweet = Model.create(
 
   TweetTag: { title: "Tweet", type: "tweet", key: "tweet", hashkey: "tweet:tweet" },
   RetweetTag: { title: "Retweet", type: "retweet", key: "retweet", hashkey: "retweet:retweet" },
+  RetweetedTag: { title: "Retweeted", type: "retweeted", key: "retweeted", hashkey: "retweeted:retweeted" },
   MentionTag: { title: "Mention", type: "mention", key: "mention", hashkey: "mention:mention" },
   DMTag: { title: "DM", type: "dm", key: "dm", hashkey: "dm:dm" },
   FavoriteTag: { title: "Favorite", type: "fav", key: "favorite", hashkey: "fav:favorite" },

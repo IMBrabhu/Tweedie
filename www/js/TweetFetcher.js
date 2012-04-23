@@ -68,6 +68,7 @@ var TweetFetcher = xo.Class(Events,
       failed: null,
       tweetId: "1",
       mentionId: "1",
+      retweetId: "1",
       favId: "1",
       dmSendId: "1",
       dmRecvId: "1",
@@ -99,6 +100,10 @@ var TweetFetcher = xo.Class(Events,
       },
       function()
       {
+        return status.failed.length ? true : this._fetchRetweets(status);
+      },
+      function()
+      {
         return status.failed.length ? true : this._fetchDMs(status);
       },
       function()
@@ -119,7 +124,7 @@ var TweetFetcher = xo.Class(Events,
           running = true;
           loop.run();
         }
-        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 600 : 120);
+        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 30 : 120);
       }
     );
   },
@@ -239,6 +244,43 @@ var TweetFetcher = xo.Class(Events,
         {
           s.failed.push({ op: "fetch", type: "fetch-mention" });
           Log.exception("Mentions fetch failed", e);
+        }
+        return true;
+      }
+    );
+  },
+
+  _fetchRetweets: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
+        return this._ajaxWithRetry(
+        {
+          method: "GET",
+          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=true&count=100&since_id=" + s.retweetId,
+          auth: this._auth
+        });
+      },
+      function(r)
+      {
+        try
+        {
+          var json = r().json();
+          if (json.length)
+          {
+            s.retweetId = json[0].id_str;
+            json.forEach(function(tweet)
+            {
+              tweet.retweeted_of_me = true;
+            });
+          }
+          s.tweets = s.tweets.concat(json);
+        }
+        catch (e)
+        {
+          s.failed.push({ op: "fetch", type: "fetch-retweet" });
+          Log.exception("Retweets fetch failed", e);
         }
         return true;
       }
