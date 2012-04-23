@@ -308,6 +308,19 @@ var TweetLists = Class(
     return this._addTweets(this._separateTweets(tweets));
   },
 
+  removeTweets: function(ids)
+  {
+    var o = this._getVelocity();
+    this.lists.forEach(function(list)
+    {
+      if (!list.isSearch())
+      {
+        list.removeTweets(ids);
+        list.recalcVelocity(o);
+      }
+    });
+  },
+
   addSearch: function(tweets)
   {
     tweets = this._separateTweets(tweets);

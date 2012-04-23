@@ -9854,6 +9854,7 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
+  retweeted_of_me: Model.Property,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -9884,6 +9885,7 @@ var Tweet = Model.create(
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
       favorited: values.favorited,
+      retweeted_of_me: values.retweeted_of_me,
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
@@ -10282,6 +10284,18 @@ var Tweet = Model.create(
     return Tweet.tweetTime(this._values.created_at);
   },
 
+  is_my_tweet: function()
+  {
+    if (this._values.user)
+    {
+      return "@" + this._values.user.screen_name.toLowerCase() === this._account.tweetLists.screenname;
+    }
+    else
+    {
+      return false;
+    }
+  },
+
   isDM: function()
   {
     return this.hasTagKey(Tweet.DMTag.hashkey);
@@ -10501,6 +10515,11 @@ var Tweet = Model.create(
         used[Tweet.FavoriteTag.hashkey] = true;
         tags.push(Tweet.FavoriteTag);
       }
+      if (this.retweeted_of_me())
+      {
+        used[Tweet.RetweetedTag.hashkey] = true;
+        tags.push(Tweet.RetweetedTag);
+      }
       var u = this._values.user || this._values.sender;
       if (u && u.lang && u.lang !== Tweet.language)
       {
@@ -10638,6 +10657,7 @@ var Tweet = Model.create(
 
   TweetTag: { title: "Tweet", type: "tweet", key: "tweet", hashkey: "tweet:tweet" },
   RetweetTag: { title: "Retweet", type: "retweet", key: "retweet", hashkey: "retweet:retweet" },
+  RetweetedTag: { title: "Retweeted", type: "retweeted", key: "retweeted", hashkey: "retweeted:retweeted" },
   MentionTag: { title: "Mention", type: "mention", key: "mention", hashkey: "mention:mention" },
   DMTag: { title: "DM", type: "dm", key: "dm", hashkey: "dm:dm" },
   FavoriteTag: { title: "Favorite", type: "fav", key: "favorite", hashkey: "fav:favorite" },
@@ -11001,10 +11021,11 @@ var TweetLists = Class(
   createDefaultList: function()
   {
     var main = new FilteredTweetsModel({ account: this._account, title: "Main", canRemove: false, name: "main", uuid: "00000000-0000-0000-0000-000000000001" });
-    var photos = new FilteredTweetsModel({ account:  this._account, title: "Media", canRemove: false, uuid: "00000000-0000-0000-0000-000000000002", viz: "media" });
-    var fav = new FilteredTweetsModel({ account:  this._account, title: "Favorites", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000003" });
-    var dms = new FilteredTweetsModel({ account:  this._account, title: "Messages", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000004", viz: "stack" });
-    var mentions = new FilteredTweetsModel({ account:  this._account, title: "Mentions", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000005" });
+    var photos = new FilteredTweetsModel({ account: this._account, title: "Media", canRemove: false, uuid: "00000000-0000-0000-0000-000000000002", viz: "media" });
+    var fav = new FilteredTweetsModel({ account: this._account, title: "Favorites", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000003" });
+    var dms = new FilteredTweetsModel({ account: this._account, title: "Messages", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000004", viz: "stack" });
+    var mentions = new FilteredTweetsModel({ account: this._account, title: "Mentions", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000005" });
+    var retweeteds = new FilteredTweetsModel({ account: this._account, title: "Retweeted", canRemoved: false, uuid: "00000000-0000-0000-0000-000000000006" });
 
     main.addIncludeTag(Tweet.TweetTag);
     main.addIncludeTag(Tweet.RetweetTag);
@@ -11014,15 +11035,17 @@ var TweetLists = Class(
     fav.addIncludeTag(Tweet.FavoriteTag);
     dms.addIncludeTag(Tweet.DMTag);
     mentions.addIncludeTag(Tweet.MentionTag);
+    retweeteds.addIncludeTag(Tweet.RetweetedTag);
 
     this.lists = new ModelSet({
       models:
       [
         main,
         mentions,
+        retweeteds,
         fav,
         dms,
-        photos
+        photos,
       ]
     });
   },
@@ -11142,30 +11165,46 @@ var TweetLists = Class(
     var include = [];
     var exclude = [];
     var urls = [];
-    var lastid = null;
+    var tweet = null;
     tweets.forEach(function(twt)
     {
       var id = twt.id_str;
-      var tweet = this.getTweet(id);
-      if (!tweet && id !== lastid)
+      var ntweet = this.getTweet(id);
+      if (!ntweet)
       {
-        lastid = id;
-        tweet = new Tweet(twt, this._account, true);
-        if (tweet.is_retweet())
+        if (tweet && id === tweet.id())
         {
-          urls = urls.concat(tweet.retweet().urls());
+          if (twt.retweeted_of_me)
+          {
+            tweet.retweeted_of_me(true);
+          }
         }
         else
         {
-          urls = urls.concat(tweet.urls());
+          tweet = new Tweet(twt, this._account, true);
+          lasttweet = tweet;
+          if (tweet.is_retweet())
+          {
+            urls = urls.concat(tweet.retweet().urls());
+          }
+          else
+          {
+            urls = urls.concat(tweet.urls());
+          }
+          include.push(tweet);
+          all.push(tweet);
         }
-        include.push(tweet);
       }
       else
       {
+        tweet = ntweet;
+        if (twt.retweeted_of_me)
+        {
+          tweet.retweeted_of_me(true);
+        }
         exclude.push(tweet);
+        all.push(tweet);
       }
-      all.push(tweet);
     }, this);
     return { all: all, include: include, exclude: exclude, urls: urls };
   },
@@ -11268,6 +11307,19 @@ var TweetLists = Class(
   addTweets: function(tweets)
   {
     return this._addTweets(this._separateTweets(tweets));
+  },
+
+  removeTweets: function(tweets)
+  {
+    var o = this._getVelocity();
+    this.lists.forEach(function(list)
+    {
+      if (!list.isSearch())
+      {
+        list.removeTweets(tweets);
+        list.recalcVelocity(o);
+      }
+    });
   },
 
   addSearch: function(tweets)
@@ -11478,6 +11530,7 @@ var TweetFetcher = xo.Class(Events,
       failed: null,
       tweetId: "1",
       mentionId: "1",
+      retweetId: "1",
       favId: "1",
       dmSendId: "1",
       dmRecvId: "1",
@@ -11509,6 +11562,10 @@ var TweetFetcher = xo.Class(Events,
       },
       function()
       {
+        return status.failed.length ? true : this._fetchRetweets(status);
+      },
+      function()
+      {
         return status.failed.length ? true : this._fetchDMs(status);
       },
       function()
@@ -11529,7 +11586,7 @@ var TweetFetcher = xo.Class(Events,
           running = true;
           loop.run();
         }
-        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 600 : 120);
+        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 30 : 120);
       }
     );
   },
@@ -11649,6 +11706,43 @@ var TweetFetcher = xo.Class(Events,
         {
           s.failed.push({ op: "fetch", type: "fetch-mention" });
           Log.exception("Mentions fetch failed", e);
+        }
+        return true;
+      }
+    );
+  },
+
+  _fetchRetweets: function(s)
+  {
+    return Co.Routine(this,
+      function()
+      {
+        return this._ajaxWithRetry(
+        {
+          method: "GET",
+          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=true&count=100&since_id=" + s.retweetId,
+          auth: this._auth
+        });
+      },
+      function(r)
+      {
+        try
+        {
+          var json = r().json();
+          if (json.length)
+          {
+            s.retweetId = json[0].id_str;
+            json.forEach(function(tweet)
+            {
+              tweet.retweeted_of_me = true;
+            });
+          }
+          s.tweets = s.tweets.concat(json);
+        }
+        catch (e)
+        {
+          s.failed.push({ op: "fetch", type: "fetch-retweet" });
+          Log.exception("Retweets fetch failed", e);
         }
         return true;
       }
@@ -12069,6 +12163,16 @@ var TweetFetcher = xo.Class(Events,
     {
       method: "POST",
       url: "https://api.twitter.com/1/friendships/destroy.json?user_id=" + id,
+      auth: this._auth
+    });
+  },
+
+  destroy: function(id)
+  {
+    return this._ajaxWithRetry(
+    {
+      method: "POST",
+      url: "https://api.twitter.com/1/statuses/destroy/" + id + ".json",
       auth: this._auth
     });
   },
@@ -12521,6 +12625,29 @@ var Account = Class(Events,
         catch (e)
         {
           this.errors.add("unfollow", "unfollow", user);
+          return null;
+        }
+      }
+    );
+  },
+
+  trash: function(tweet)
+  {
+    return Co.Routine(this,
+      function()
+      {
+        this.tweetLists.removeTweet([ tweet ]);
+        return this._fetcher.destroy(tweet.id());
+      },
+      function(r)
+      {
+        try
+        {
+          return r();
+        }
+        catch (e)
+        {
+          this.errors.add("trash", "tash", user);
           return null;
         }
       }
@@ -13862,6 +13989,12 @@ var TweetController = xo.Controller.create(
     );
   },
 
+  onTrashTweet: function(tweet, _, _, models)
+  {
+    this.metric("trash");
+    models.account().trash(tweet);
+  },
+
   onProfilePic: function(tweet, _, _, models)
   {
     this.metric("profile_pic:open");
@@ -14254,6 +14387,7 @@ var AccountController = xo.Controller.create(
       {{/has_children}}\
     {{/include_children}}\
     {{^isDM}}\
+      {{#is_my_tweet}}<div class="action-box" data-action-click="TrashTweet"><div class="action trash"></div></div>{{/is_my_tweet}}\
       <div class="action-box" data-action-click="SendReply"><div class="action reply"></div></div>\
       <div class="action-box" data-action-click="SendRetweet"><div class="action retweet"></div></div>\
       <div class="action-box" data-action-click="ToggleFavorite"><div class="action favorite {{#favorited}}active{{/favorited}}"></div></div>\

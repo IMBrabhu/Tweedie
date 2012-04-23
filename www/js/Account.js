@@ -37,6 +37,7 @@ var Account = Class(Events,
         this.userInfo = info.userInfo
         if (this.userInfo && this.userInfo.screen_name)
         {
+          this.lc_screen_name = this.userInfo.screen_name.toLowerCase();
           this.tweetLists.screenname = "@" + this.userInfo.screen_name;
           this.emit("screenNameChange");
         }
@@ -71,6 +72,10 @@ var Account = Class(Events,
         this._fetcher.on("tweets", function(evt, tweets)
         {
           this.tweetLists.addTweets(tweets);
+        }, this);
+        this._fetcher.on("untweets", function(evt, ids)
+        {
+          this.tweetLists.removeTweets(ids);
         }, this);
         this._fetcher.on("searches", function(evt, tweets)
         {
@@ -295,6 +300,29 @@ var Account = Class(Events,
         catch (e)
         {
           this.errors.add("unfollow", "unfollow", user);
+          return null;
+        }
+      }
+    );
+  },
+
+  trash: function(tweet)
+  {
+    return Co.Routine(this,
+      function()
+      {
+        this.tweetLists.removeTweets([ tweet.id() ]);
+        return this._fetcher.destroy(tweet.id());
+      },
+      function(r)
+      {
+        try
+        {
+          return r();
+        }
+        catch (e)
+        {
+          this.errors.add("trash", "trash", tweet);
           return null;
         }
       }

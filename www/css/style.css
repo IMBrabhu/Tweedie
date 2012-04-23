@@ -590,6 +590,10 @@ body
 {
   background-position: -69px -13px;
 }
+.actions .action.trash
+{
+  background-position: -184px -12px;
+}
 .in_reply_to
 {
   padding-left: 56px;

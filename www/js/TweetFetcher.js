@@ -343,7 +343,6 @@ var TweetFetcher = xo.Class(Events,
   _runUserStreamer: function()
   {
     var self = this;
-    var friends = null;
     var pending = "";
     var count = 0;
     var timer = null;
@@ -365,6 +364,7 @@ var TweetFetcher = xo.Class(Events,
         var tweets = [];
         var favs = [];
         var unfavs = [];
+        var untweets = [];
         for (var i = 0, len = lines.length - 1; i < len; i++)
         {
           var line = lines[i];
@@ -375,45 +375,39 @@ var TweetFetcher = xo.Class(Events,
             try
             {
               line = JSON.parse(line);
-              if (!friends)
+              if (line.event)
               {
-                friends = line;
-              }
-              else
-              {
-                if (line.event)
+                if (line.source.screen_name === self._account.userInfo.screen_name)
                 {
-                  if (line.source.screen_name === self._account.userInfo.screen_name)
+                  switch (line.event)
                   {
-                    switch (line.event)
-                    {
-                      case "favorite": // event, created_at, source, target, target_object
-                        favs.unshift(line.target_object);
-                        break;
-                      case "unfavorite":
-                        unfavs.unshift(line.target_object);
-                        break;
-                      case "follow":
-                      case "unfollow":
-                      default:
-                        break;
-                    }
+                    case "favorite": // event, created_at, source, target, target_object
+                      favs.unshift(line.target_object);
+                      break;
+                    case "unfavorite":
+                      unfavs.unshift(line.target_object);
+                      break;
+                    case "follow":
+                    case "unfollow":
+                    default:
+                      break;
                   }
                 }
-                else if (line.friends)
-                {
-                }
-                else if (line["delete"])
-                {
-                }
-                else if (line.direct_message)
-                {
-                  tweets.unshift(line.direct_message);
-                }
-                else if (line.text)
-                {
-                  tweets.unshift(line);
-                }
+              }
+              else if (line.friends)
+              {
+              }
+              else if (line["delete"])
+              {
+                untweets.unshift(line["delete"].status.id_str);
+              }
+              else if (line.direct_message)
+              {
+                tweets.unshift(line.direct_message);
+              }
+              else if (line.text)
+              {
+                tweets.unshift(line);
               }
             }
             catch (e)
@@ -426,6 +420,7 @@ var TweetFetcher = xo.Class(Events,
         tweets.length && self.emit("tweets", tweets);
         favs.length && self.emit("favs", favs);
         unfavs.length && self.emit("unfavs", unfavs);
+        untweets.length && self.emit("untweets", untweets);
 
         pending = pending.substr(offset);
         if (timer)
@@ -701,6 +696,16 @@ var TweetFetcher = xo.Class(Events,
     {
       method: "POST",
       url: "https://api.twitter.com/1/friendships/destroy.json?user_id=" + id,
+      auth: this._auth
+    });
+  },
+
+  destroy: function(id)
+  {
+    return this._ajaxWithRetry(
+    {
+      method: "POST",
+      url: "https://api.twitter.com/1/statuses/destroy/" + id + ".json",
       auth: this._auth
     });
   },

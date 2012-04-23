@@ -34,7 +34,7 @@ var Tweet = Model.create(
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
       favorited: values.favorited,
-      retweeted_of_me: values.retweeted_of_me,
+      retweeted_of_me: values.retweeted_of_me || (values.retweeted_status && values.retweeted_status.user.screen_name === this._account.lc_screen_name),
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
@@ -192,7 +192,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient.name;
       }
@@ -215,7 +215,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient.screen_name;
       }
@@ -243,7 +243,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient;
       }
@@ -431,6 +431,18 @@ var Tweet = Model.create(
   created_since: function()
   {
     return Tweet.tweetTime(this._values.created_at);
+  },
+
+  is_my_tweet: function()
+  {
+    if (this._values.user)
+    {
+      return this._values.user.screen_name.toLowerCase() === this._account.lc_screen_name;
+    }
+    else
+    {
+      return false;
+    }
   },
 
   isDM: function()

@@ -52,6 +52,7 @@ var __resources = {
       {{/has_children}}\
     {{/include_children}}\
     {{^isDM}}\
+      {{#is_my_tweet}}<div class="action-box" data-action-click="TrashTweet"><div class="action trash"></div></div>{{/is_my_tweet}}\
       <div class="action-box" data-action-click="SendReply"><div class="action reply"></div></div>\
       <div class="action-box" data-action-click="SendRetweet"><div class="action retweet"></div></div>\
       <div class="action-box" data-action-click="ToggleFavorite"><div class="action favorite {{#favorited}}active{{/favorited}}"></div></div>\

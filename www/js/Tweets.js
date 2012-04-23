@@ -65,7 +65,7 @@ var FilteredTweetsModel = Model.create(
     }
     if (ntweets.length)
     {
-      if (this.tweets().prepend(ntweets))
+      if (otweets.prepend(ntweets))
       {
         this.emit("update.tweets");
         this.emit("update");
@@ -73,14 +73,27 @@ var FilteredTweetsModel = Model.create(
     }
   },
 
-  removeTweets: function(tweets)
+  removeTweets: function(ids)
   {
-    if (tweets.length)
+    if (ids.length)
     {
-      if (this.tweets().remove(tweets))
+      var otweets = this.tweets();
+      var rtweets = [];
+      ids.forEach(function(id)
       {
-        this.emit("update.tweets");
-        this.emit("update");
+        var tweet = otweets.findByProperty("id", id);
+        if (tweet)
+        {
+          rtweets.push(tweet);
+        }
+      });
+      if (rtweets.length)
+      {
+        if (otweets.remove(rtweets))
+        {
+          this.emit("update.tweets");
+          this.emit("update");
+        }
       }
     }
   },

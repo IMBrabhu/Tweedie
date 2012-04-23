@@ -288,6 +288,12 @@ var TweetController = xo.Controller.create(
     );
   },
 
+  onTrashTweet: function(tweet, _, _, models)
+  {
+    this.metric("trash");
+    models.account().trash(tweet);
+  },
+
   onProfilePic: function(tweet, _, _, models)
   {
     this.metric("profile_pic:open");
