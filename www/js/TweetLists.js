@@ -184,7 +184,12 @@ var TweetLists = Class(
           lasttweet = tweet;
           if (tweet.is_retweet())
           {
-            urls = urls.concat(tweet.retweet().urls());
+            var retweet = tweet.retweet();
+            urls = urls.concat(retweet.urls());
+            if (retweet.is_my_tweet())
+            {
+              tweet.retweeted_of_me(true);
+            }
           }
           else
           {

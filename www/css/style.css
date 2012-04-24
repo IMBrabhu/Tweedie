@@ -457,6 +457,10 @@ body
   font-size: 12px;
   color: #808080;
 }
+.retweetedby .retweetby-name
+{
+  cursor: pointer;
+}
 .retweetedby .retweetby-screenname
 {
   font-size: 10px;

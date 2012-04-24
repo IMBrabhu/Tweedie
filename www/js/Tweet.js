@@ -3,7 +3,6 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
-  retweeted_of_me: Model.Property,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -22,7 +21,7 @@ var Tweet = Model.create(
   _reduce: function(values)
   {
     return {
-      id_str: values.retweeted_status ? values.retweeted_status.id_str : values.id_str,
+      id_str: values.id_str,
       entities: values.entities,
       text: values.text,
       user: values.user && { name: values.user.name, screen_name: values.user.screen_name, id_str: values.user.id_str, lang: values.user.lang },
@@ -478,6 +477,27 @@ var Tweet = Model.create(
     else
     {
       return Model.updateProperty(model, "favorited");
+    }
+  },
+
+  retweeted_of_me: function(nv)
+  {
+    var model = this.is_retweet() ? this.retweet() : this;
+    if (arguments.length)
+    {
+      var ov = Model.updateProperty(model, "retweeted_of_me", nv);
+      if (ov != nv)
+      {
+        this._tags = null;
+        this._tagsHash = null;
+        this.emit("update.retweeted_by_me");
+        this.emit("update");
+      }
+      return ov;
+    }
+    else
+    {
+      return Model.updateProperty(model, "retweeted_of_me");
     }
   },
 

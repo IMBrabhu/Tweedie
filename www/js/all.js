@@ -7665,7 +7665,14 @@ var RootView = exports.RootView = Class(View,
       var view = null;
       if (target.getAttribute)
       {
-        action = action || target.getAttribute(name);
+        if (!action)
+        {
+          action = target.getAttribute(name);
+          if (action)
+          {
+            evt.actionTarget = target;
+          }
+        }
         view = ids[target.getAttribute("data-view")];
       }
       if (action && view)
@@ -9854,7 +9861,6 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
-  retweeted_of_me: Model.Property,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -9873,7 +9879,7 @@ var Tweet = Model.create(
   _reduce: function(values)
   {
     return {
-      id_str: values.retweeted_status ? values.retweeted_status.id_str : values.id_str,
+      id_str: values.id_str,
       entities: values.entities,
       text: values.text,
       user: values.user && { name: values.user.name, screen_name: values.user.screen_name, id_str: values.user.id_str, lang: values.user.lang },
@@ -9885,7 +9891,7 @@ var Tweet = Model.create(
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
       favorited: values.favorited,
-      retweeted_of_me: values.retweeted_of_me,
+      retweeted_of_me: values.retweeted_of_me || (values.retweeted_status && values.retweeted_status.user.screen_name === this._account.lc_screen_name),
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
@@ -10043,7 +10049,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient.name;
       }
@@ -10066,7 +10072,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient.screen_name;
       }
@@ -10094,7 +10100,7 @@ var Tweet = Model.create(
     }
     else if (this._values.sender)
     {
-      if ("@" + this._values.sender.screen_name.toLowerCase() === this._account.tweetLists.screenname)
+      if (this._values.sender.screen_name.toLowerCase() === this._account.lc_screen_name)
       {
         return this._values.recipient;
       }
@@ -10288,7 +10294,7 @@ var Tweet = Model.create(
   {
     if (this._values.user)
     {
-      return "@" + this._values.user.screen_name.toLowerCase() === this._account.tweetLists.screenname;
+      return this._values.user.screen_name.toLowerCase() === this._account.lc_screen_name;
     }
     else
     {
@@ -10329,6 +10335,27 @@ var Tweet = Model.create(
     else
     {
       return Model.updateProperty(model, "favorited");
+    }
+  },
+
+  retweeted_of_me: function(nv)
+  {
+    var model = this.is_retweet() ? this.retweet() : this;
+    if (arguments.length)
+    {
+      var ov = Model.updateProperty(model, "retweeted_of_me", nv);
+      if (ov != nv)
+      {
+        this._tags = null;
+        this._tagsHash = null;
+        this.emit("update.retweeted_by_me");
+        this.emit("update");
+      }
+      return ov;
+    }
+    else
+    {
+      return Model.updateProperty(model, "retweeted_of_me");
     }
   },
 
@@ -10733,7 +10760,7 @@ var FilteredTweetsModel = Model.create(
     }
     if (ntweets.length)
     {
-      if (this.tweets().prepend(ntweets))
+      if (otweets.prepend(ntweets))
       {
         this.emit("update.tweets");
         this.emit("update");
@@ -10741,14 +10768,27 @@ var FilteredTweetsModel = Model.create(
     }
   },
 
-  removeTweets: function(tweets)
+  removeTweets: function(ids)
   {
-    if (tweets.length)
+    if (ids.length)
     {
-      if (this.tweets().remove(tweets))
+      var otweets = this.tweets();
+      var rtweets = [];
+      ids.forEach(function(id)
       {
-        this.emit("update.tweets");
-        this.emit("update");
+        var tweet = otweets.findByProperty("id", id);
+        if (tweet)
+        {
+          rtweets.push(tweet);
+        }
+      });
+      if (rtweets.length)
+      {
+        if (otweets.remove(rtweets))
+        {
+          this.emit("update.tweets");
+          this.emit("update");
+        }
       }
     }
   },
@@ -11185,7 +11225,12 @@ var TweetLists = Class(
           lasttweet = tweet;
           if (tweet.is_retweet())
           {
-            urls = urls.concat(tweet.retweet().urls());
+            var retweet = tweet.retweet();
+            urls = urls.concat(retweet.urls());
+            if (retweet.is_my_tweet())
+            {
+              tweet.retweeted_of_me(true);
+            }
           }
           else
           {
@@ -11309,14 +11354,14 @@ var TweetLists = Class(
     return this._addTweets(this._separateTweets(tweets));
   },
 
-  removeTweets: function(tweets)
+  removeTweets: function(ids)
   {
     var o = this._getVelocity();
     this.lists.forEach(function(list)
     {
       if (!list.isSearch())
       {
-        list.removeTweets(tweets);
+        list.removeTweets(ids);
         list.recalcVelocity(o);
       }
     });
@@ -11805,7 +11850,6 @@ var TweetFetcher = xo.Class(Events,
   _runUserStreamer: function()
   {
     var self = this;
-    var friends = null;
     var pending = "";
     var count = 0;
     var timer = null;
@@ -11827,6 +11871,7 @@ var TweetFetcher = xo.Class(Events,
         var tweets = [];
         var favs = [];
         var unfavs = [];
+        var untweets = [];
         for (var i = 0, len = lines.length - 1; i < len; i++)
         {
           var line = lines[i];
@@ -11837,45 +11882,39 @@ var TweetFetcher = xo.Class(Events,
             try
             {
               line = JSON.parse(line);
-              if (!friends)
+              if (line.event)
               {
-                friends = line;
-              }
-              else
-              {
-                if (line.event)
+                if (line.source.screen_name === self._account.userInfo.screen_name)
                 {
-                  if (line.source.screen_name === self._account.userInfo.screen_name)
+                  switch (line.event)
                   {
-                    switch (line.event)
-                    {
-                      case "favorite": // event, created_at, source, target, target_object
-                        favs.unshift(line.target_object);
-                        break;
-                      case "unfavorite":
-                        unfavs.unshift(line.target_object);
-                        break;
-                      case "follow":
-                      case "unfollow":
-                      default:
-                        break;
-                    }
+                    case "favorite": // event, created_at, source, target, target_object
+                      favs.unshift(line.target_object);
+                      break;
+                    case "unfavorite":
+                      unfavs.unshift(line.target_object);
+                      break;
+                    case "follow":
+                    case "unfollow":
+                    default:
+                      break;
                   }
                 }
-                else if (line.friends)
-                {
-                }
-                else if (line["delete"])
-                {
-                }
-                else if (line.direct_message)
-                {
-                  tweets.unshift(line.direct_message);
-                }
-                else if (line.text)
-                {
-                  tweets.unshift(line);
-                }
+              }
+              else if (line.friends)
+              {
+              }
+              else if (line["delete"])
+              {
+                untweets.unshift(line["delete"].status.id_str);
+              }
+              else if (line.direct_message)
+              {
+                tweets.unshift(line.direct_message);
+              }
+              else if (line.text)
+              {
+                tweets.unshift(line);
               }
             }
             catch (e)
@@ -11888,6 +11927,7 @@ var TweetFetcher = xo.Class(Events,
         tweets.length && self.emit("tweets", tweets);
         favs.length && self.emit("favs", favs);
         unfavs.length && self.emit("unfavs", unfavs);
+        untweets.length && self.emit("untweets", untweets);
 
         pending = pending.substr(offset);
         if (timer)
@@ -12367,6 +12407,7 @@ var Account = Class(Events,
         this.userInfo = info.userInfo
         if (this.userInfo && this.userInfo.screen_name)
         {
+          this.lc_screen_name = this.userInfo.screen_name.toLowerCase();
           this.tweetLists.screenname = "@" + this.userInfo.screen_name;
           this.emit("screenNameChange");
         }
@@ -12401,6 +12442,10 @@ var Account = Class(Events,
         this._fetcher.on("tweets", function(evt, tweets)
         {
           this.tweetLists.addTweets(tweets);
+        }, this);
+        this._fetcher.on("untweets", function(evt, ids)
+        {
+          this.tweetLists.removeTweets(ids);
         }, this);
         this._fetcher.on("searches", function(evt, tweets)
         {
@@ -12636,7 +12681,7 @@ var Account = Class(Events,
     return Co.Routine(this,
       function()
       {
-        this.tweetLists.removeTweet([ tweet ]);
+        this.tweetLists.removeTweets([ tweet.id() ]);
         return this._fetcher.destroy(tweet.id());
       },
       function(r)
@@ -12647,7 +12692,7 @@ var Account = Class(Events,
         }
         catch (e)
         {
-          this.errors.add("trash", "tash", user);
+          this.errors.add("trash", "trash", tweet);
           return null;
         }
       }
@@ -13976,7 +14021,7 @@ var TweetController = xo.Controller.create(
   onMention: function(_, _, e, models)
   {
     this.metric("mention:open");
-    var screenName = e.target.dataset.name.slice(1).toLowerCase();
+    var screenName = e.actionTarget.dataset.name.slice(1).toLowerCase();
     Co.Routine(this,
       function()
       {
@@ -14361,7 +14406,7 @@ var AccountController = xo.Controller.create(
     </div>\
   {{/retweet}}\
   {{#is_retweet}}\
-    <div class="retweetedby">Retweeted by {{name}} <span class="retweetby-screenname">@{{screen_name}}</span></div>\
+    <div class="retweetedby">Retweeted by <span class="retweetby-name" data-action-click="Mention" data-name="@{{screen_name}}">{{name}} <span class="retweetby-screenname">@{{screen_name}}</span></span></div>\
   {{/is_retweet}}\
   {{^has_children}}\
     {{#include_replies}}\
