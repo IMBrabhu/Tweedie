@@ -22,6 +22,7 @@ var TweetFetcher = xo.Class(Events,
     });
     this._account = account;
     this._loop = null;
+    this._friends = config.friends;
   },
 
   fetchTweets: function()
@@ -388,6 +389,12 @@ var TweetFetcher = xo.Class(Events,
                       unfavs.unshift(line.target_object);
                       break;
                     case "follow":
+                      if (self._friends.indexOf(line.target.id) === -1)
+                      {
+                        self._friends.push(line.target.id);
+                        self.emit("update.friends");
+                      }
+                      break;
                     case "unfollow":
                     default:
                       break;
@@ -396,6 +403,9 @@ var TweetFetcher = xo.Class(Events,
               }
               else if (line.friends)
               {
+                line.friends.unshift(0, self._friends.length);
+                self._friends.splice.apply(self._friends, line.friends);
+                self.emit("update.friends");
               }
               else if (line["delete"])
               {
@@ -615,6 +625,18 @@ var TweetFetcher = xo.Class(Events,
       }
     };
     return config;
+  },
+
+  isFriend: function(user)
+  {
+    if (!this._friends.length || user.screen_name === this._account.userInfo.screen_name)
+    {
+      return true;
+    }
+    else
+    {
+      return this._friends.indexOf(parseInt(user.id_str)) !== -1;
+    }
   },
 
   tweet: function(m)

@@ -501,6 +501,11 @@ var Tweet = Model.create(
     }
   },
 
+  from_friend: function()
+  {
+    return this._account._fetcher.isFriend(this.is_retweet() ? this.retweet().user() : this.user());
+  },
+
   tags: function()
   {
     if (!this._tags)
@@ -689,6 +694,11 @@ var Tweet = Model.create(
         used[Tweet.RetweetedTag.hashkey] = true;
         tags.push(Tweet.RetweetedTag);
       }
+      if (!this.from_friend())
+      {
+        used[Tweet.StrangerTag.hashkey] = true;
+        tags.push(Tweet.StrangerTag);
+      }
       var u = this._values.user || this._values.sender;
       if (u && u.lang && u.lang !== Tweet.language)
       {
@@ -833,5 +843,6 @@ var Tweet = Model.create(
   PhotoTag: { title: "Photo", type: "topic", key: "photo", hashkey: "topic:photo" },
   VideoTag: { title: "Video", type: "topic", key: "video", hashkey: "topic:video" },
   PlaceTag: { title: "Place", type: "topic", key: "place", hashkey: "topic:place" },
-  GeoTag: { title: "Geo", type: "topic", key: "geo", hashkey: "topic:geo" }
+  GeoTag: { title: "Geo", type: "topic", key: "geo", hashkey: "topic:geo" },
+  StrangerTag: { title: "Stranger", type: "stranger", key: "stranger", hashkey: "stranger:stranger" }
 });

@@ -41,6 +41,7 @@ var Account = Class(Events,
           this.tweetLists.screenname = "@" + this.userInfo.screen_name;
           this.emit("screenNameChange");
         }
+        this._friends = info.friends || (info.friends = []);
         this._fetcher = new TweetFetcher(this, info);
         this._fetcher.on("login", function(evt, info)
         {
@@ -61,6 +62,10 @@ var Account = Class(Events,
             this._lgrid.write("/accounts", this.serialize());
           }
           this.emit("opened");
+        }, this);
+        this._fetcher.on("update.friends", function()
+        {
+          this._lgrid.write("/accounts", this.serialize());
         }, this);
 
         Topics.open();
@@ -339,7 +344,8 @@ var Account = Class(Events,
     return [{
       version: 1,
       oauth: this._fetcher._auth.serialize(),
-      userInfo: this.userInfo
+      userInfo: this.userInfo,
+      friends: this._friends
     }];
   }
 });
