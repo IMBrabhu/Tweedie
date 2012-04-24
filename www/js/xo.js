@@ -3451,7 +3451,14 @@ var RootView = exports.RootView = Class(View,
       var view = null;
       if (target.getAttribute)
       {
-        action = action || target.getAttribute(name);
+        if (!action)
+        {
+          action = target.getAttribute(name);
+          if (action)
+          {
+            evt.actionTarget = target;
+          }
+        }
         view = ids[target.getAttribute("data-view")];
       }
       if (action && view)

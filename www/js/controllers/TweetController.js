@@ -275,7 +275,7 @@ var TweetController = xo.Controller.create(
   onMention: function(_, _, e, models)
   {
     this.metric("mention:open");
-    var screenName = e.target.dataset.name.slice(1).toLowerCase();
+    var screenName = e.actionTarget.dataset.name.slice(1).toLowerCase();
     Co.Routine(this,
       function()
       {

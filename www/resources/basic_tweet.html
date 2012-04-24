@@ -25,7 +25,7 @@
     </div>
   {{/retweet}}
   {{#is_retweet}}
-    <div class="retweetedby">Retweeted by {{name}} <span class="retweetby-screenname">@{{screen_name}}</span></div>
+    <div class="retweetedby">Retweeted by <span class="retweetby-name" data-action-click="Mention" data-name="@{{screen_name}}">{{name}} <span class="retweetby-screenname">@{{screen_name}}</span></span></div>
   {{/is_retweet}}
   {{^has_children}}
     {{#include_replies}}
