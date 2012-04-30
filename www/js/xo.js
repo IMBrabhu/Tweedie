@@ -5401,7 +5401,10 @@ var SQLStorageGridProvider = exports.SQLStorageGridProvider = Class(GridProvider
             function(db)
             {
               Log.time("dbWrite: " + dpath);
-              return this._doTransaction(db(), 'INSERT OR REPLACE INTO ' + this._dbinfo.table + ' (id, data) VALUES (?,?)', [ dpath, JSON.stringify(data) ]);
+              return this._doTransaction(db(), 'INSERT OR REPLACE INTO ' + this._dbinfo.table + ' (id, data) VALUES (?,?)', [ dpath, JSON.stringify(data, function(k, v)
+              {
+                return k[0] === "_" ? undefined : v; // Don't include 'private' keys
+              }) ]);
             },
             function(r)
             {

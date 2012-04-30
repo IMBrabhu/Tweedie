@@ -12,6 +12,7 @@
 		2217040E14F6262A0097D266 /* ChildBrowserViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = 2217040D14F6262A0097D266 /* ChildBrowserViewController.xib */; };
 		228F59A2150F128C00F3E560 /* icon-144.png in Resources */ = {isa = PBXBuildFile; fileRef = 228F59A1150F128C00F3E560 /* icon-144.png */; };
 		228F59A4150F12A800F3E560 /* Default-Portrait@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 228F59A3150F12A800F3E560 /* Default-Portrait@2x.png */; };
+		22BDB635154916C900ABF99C /* ICloudPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 22BDB634154916C900ABF99C /* ICloudPlugin.m */; };
 		22DC172D1521943C000A7D35 /* Default-Landscape@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 22DC172C1521943C000A7D35 /* Default-Landscape@2x.png */; };
 		22DC1730152194F4000A7D35 /* Default-Landscape.png in Resources */ = {isa = PBXBuildFile; fileRef = 22DC172F152194F4000A7D35 /* Default-Landscape.png */; };
 		22E0ECC21510585200CE1F2C /* index.html in CopyFiles */ = {isa = PBXBuildFile; fileRef = 22E0ECC01510584500CE1F2C /* index.html */; };
@@ -73,6 +74,8 @@
 		224B2D20153CD79300DB381C /* Tweedie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Tweedie.entitlements; sourceTree = "<group>"; };
 		228F59A1150F128C00F3E560 /* icon-144.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon-144.png"; path = "Resources/icons/icon-144.png"; sourceTree = "<group>"; };
 		228F59A3150F12A800F3E560 /* Default-Portrait@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "Default-Portrait@2x.png"; path = "Resources/splash/Default-Portrait@2x.png"; sourceTree = "<group>"; };
+		22BDB633154916C900ABF99C /* ICloudPlugin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ICloudPlugin.h; path = Plugins/ICloudPlugin.h; sourceTree = "<group>"; };
+		22BDB634154916C900ABF99C /* ICloudPlugin.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ICloudPlugin.m; path = Plugins/ICloudPlugin.m; sourceTree = "<group>"; };
 		22DC172C1521943C000A7D35 /* Default-Landscape@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "Default-Landscape@2x.png"; path = "Resources/splash/Default-Landscape@2x.png"; sourceTree = "<group>"; };
 		22DC172F152194F4000A7D35 /* Default-Landscape.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "Default-Landscape.png"; path = "Resources/splash/Default-Landscape.png"; sourceTree = "<group>"; };
 		22E0ECC01510584500CE1F2C /* index.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; name = index.html; path = www/index.html; sourceTree = "<group>"; };
@@ -157,6 +160,15 @@
 				220DDFCD14F6206400770AA8 /* ChildBrowserViewController.m */,
 			);
 			name = ChildBrowser;
+			sourceTree = "<group>";
+		};
+		22BDB6311549157100ABF99C /* iCloud */ = {
+			isa = PBXGroup;
+			children = (
+				22BDB633154916C900ABF99C /* ICloudPlugin.h */,
+				22BDB634154916C900ABF99C /* ICloudPlugin.m */,
+			);
+			name = iCloud;
 			sourceTree = "<group>";
 		};
 		22E0ECBB151056C700CE1F2C /* web */ = {
@@ -300,6 +312,7 @@
 		22EC03FB14F61B1700205358 /* Plugins */ = {
 			isa = PBXGroup;
 			children = (
+				22BDB6311549157100ABF99C /* iCloud */,
 				220DDFC914F6205500770AA8 /* ChildBrowser */,
 				22EC03FC14F61B1700205358 /* README */,
 			);
@@ -438,6 +451,7 @@
 				22EC03F814F61B1700205358 /* MainViewController.m in Sources */,
 				220DDFCF14F6206400770AA8 /* ChildBrowserCommand.m in Sources */,
 				220DDFD014F6206400770AA8 /* ChildBrowserViewController.m in Sources */,
+				22BDB635154916C900ABF99C /* ICloudPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -67,7 +67,7 @@
 		NSLog(@"Tweed launchOptions = %@", url);
     }
   
-    //[NSClassFromString(@"WebView") _enableRemoteInspector];
+    [NSClassFromString(@"WebView") _enableRemoteInspector];
   
     [self fixup];
     

@@ -14,12 +14,12 @@ var FilteredTweetsModel = Model.create(
   {
     var self = this;
     __super(values);
-    self._lgrid = grid.get();
     self.tweets(new FilteredModelSet({ key: "id", limit: values.limit || 1000 }));
     self.unread(0);
     self.velocity(0);
     self._includeTags = [];
     self._excludeTags = [];
+    self._account = values.account;
     self._tweetLists = values.account.tweetLists;
     self.viz(self.viz() || "list");
     self._removed = false;
@@ -30,16 +30,17 @@ var FilteredTweetsModel = Model.create(
     return Co.Routine(this,
       function()
       {
-        return isNew || this._restore();
+        return isNew ? false : this._restore();
       },
-      function()
+      function(r)
       {
+        r = r();
         this.updateUnreadAndVelocity();
         this.on("update.tweets update.includeTags update.excludeTags update.lastRead update.viz", function()
         {
           this._save();
         }, this);
-        return true;
+        return r;
       }
     );
   },
@@ -239,7 +240,7 @@ var FilteredTweetsModel = Model.create(
   markAllAsRead: function()
   {
     var last = this.tweets().models[0];
-    this.lastRead(last && last.id());
+    this.lastRead((last && last.id()) || "0");
     this.updateUnreadAndVelocity();
   },
 
@@ -265,27 +266,19 @@ var FilteredTweetsModel = Model.create(
       var models = tweets.models;
       for (i = 0, len = models.length; i < len; i++)
       {
-        var oid = models[i].id();
-        if (Tweet.compareTweetIds(id, oid) <= 0)
+        if (Tweet.compareTweetIds(id, models[i].id()) <= 0)
         {
-          this.lastRead(oid);
-          this.unread(i);
-          return;
+          break;
         }
       }
-      this.lastRead("0");
-      this.unread(len);
     }
-    else
-    {
-      this.unread(i);
-    }
+    this.unread(i);
   },
 
   remove: function()
   {
     this._removed = true;
-    return this._lgrid.remove("/tweetlist/0/" + this.uuid());
+    this._account.preferences.removeAccountList(this.uuid());
   },
 
   _save: function()
@@ -293,13 +286,13 @@ var FilteredTweetsModel = Model.create(
     if (!this._removed)
     {
       this._updateUnread();
-      this._lgrid.write("/tweetlist/0/" + this.uuid(),
+      this._account.preferences.setAccountList(this.uuid(),
       {
         includeTags: this._includeTags,
         excludeTags: this._excludeTags,
-        tweets: this.tweets().serialize().map(function(tweet) { return tweet.id_str; }),
         lastRead: this.lastRead(),
-        viz: this.viz()
+        viz: this.viz(),
+        tweets: this.tweets().serialize().map(function(tweet) { return tweet.id_str; })
       });
     }
   },
@@ -307,29 +300,31 @@ var FilteredTweetsModel = Model.create(
   _restore: function()
   {
     return Co.Routine(this,
-      function(r)
+      function()
       {
-        return this._lgrid.read("/tweetlist/0/" + this.uuid());
+        return this._account.preferences.getAccountList(this.uuid());
       },
       function(vals)
       {
+        vals = vals();
         this.delayUpdate(function()
         {
-          vals = vals() || {};
-
           this.viz(vals.viz || this.viz());
           var tweets = [];
           var lists = this._tweetLists;
-          (vals.tweets || []).forEach(function(id)
+          if (!vals._needRefresh)
           {
-            var tweet = lists.getTweet(id);
-            if (tweet)
+            (vals.tweets || []).forEach(function(id)
             {
-              tweets.push(tweet);
-            }
-          }, this);
-          this.addTweets(tweets);
-          this.lastRead(vals.lastRead);
+              var tweet = lists.getTweet(id);
+              if (tweet)
+              {
+                tweets.push(tweet);
+              }
+            }, this);
+            this.addTweets(tweets);
+          }
+          this.lastRead(vals.lastRead || "0");
           (vals.includeTags || []).forEach(function(t)
           {
             this.addIncludeTag(t.tag, false);
@@ -339,8 +334,70 @@ var FilteredTweetsModel = Model.create(
             this.addExcludeTag(t.tag, false);
           }, this);
         });
+        return vals._needRefresh || false;
+      }
+    );
+  },
+
+  refresh: function()
+  {
+    return Co.Routine(this,
+      function()
+      {
+        return this._account.preferences.getAccountList(this.uuid());
+      },
+      function(vals)
+      {
+        vals = vals();
+        this.delayUpdate(function()
+        {
+          this.viz(vals.viz || this.viz());
+          this.lastRead(vals.lastRead || "0");
+          var diff = this._calcTagDiff(this._includeTags || [], vals.includeTags || []);
+          diff.add.forEach(function(t)
+          {
+            this.addIncludeTag(t.tag, false);
+          }, this);
+          diff.remove.forEach(function(t)
+          {
+            this.removeIncludeTag(t.tag, false);
+          }, this);
+          diff = this._calcTagDiff(this._excludeTags || [], vals.excludeTags || []);
+          diff.add.forEach(function(t)
+          {
+            this.addExcludeTag(t.tag, false);
+          }, this);
+          diff.remove.forEach(function(t)
+          {
+            this.removeExcludeTag(t.tag, false);
+          }, this);
+        });
         return true;
       }
     );
+  },
+
+  _calcTagDiff: function(oldTags, newTags)
+  {
+    var diff =
+    {
+      add: [],
+      remove: []
+    };
+    newTags.forEach(function(t)
+    {
+      if (this._tagIndex(oldTags, t.tag) === -1)
+      {
+        diff.add.push(t);
+      }
+    }, this);
+    oldTags.forEach(function(t)
+    {
+      if (this._tagIndex(newTags, t.tag) === -1)
+      {
+        diff.remove.push(t);
+      }
+    }, this);
+    return diff;
   }
 });

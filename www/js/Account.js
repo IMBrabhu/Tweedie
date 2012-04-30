@@ -2,10 +2,10 @@ var Account = Class(Events,
 {
   constructor: function(userInfo)
   {
-    this._lgrid = grid.get();
     this.tweetLists = new TweetLists(this);
     this.errors = new Errors(this);
     this.userAndTags = new UsersAndTags(this);
+    this.preferences = new Preferences("/tweets/0");
   },
 
   open: function()
@@ -13,7 +13,7 @@ var Account = Class(Events,
     return Co.Routine(this,
       function()
       {
-        return this._lgrid.read("/accounts");
+        return this.preferences.getAccounts();
       },
       function(info)
       {
@@ -59,13 +59,13 @@ var Account = Class(Events,
             this.userInfo = info;
             this.tweetLists.screenname = "@" + info.screen_name;
             this.emit("screenNameChange");
-            this._lgrid.write("/accounts", this.serialize());
+            this.preferences.setAccounts(this.serialize());
           }
           this.emit("opened");
         }, this);
         this._fetcher.on("update.friends", function()
         {
-          this._lgrid.write("/accounts", this.serialize());
+          this.preferences.setAccounts(this.serialize());
         }, this);
 
         Topics.open();

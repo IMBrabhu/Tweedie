@@ -13,7 +13,8 @@ var TweetLists = Class(
       tweets: new IndexedModelSet({ key: "id", limit: 2000 }),
       mentions: new IndexedModelSet({ key: "id", limit: 200 }),
       dms: new IndexedModelSet({ key: "id", limit: 500 }),
-      favs: new IndexedModelSet({ key: "id", limit: 500 })
+      favs: new IndexedModelSet({ key: "id", limit: 500 }),
+      retweeted: new IndexedModelSet({ key: "id", limit: 100 })
     };
   },
 
@@ -266,6 +267,7 @@ var TweetLists = Class(
         var mentionb = [];
         var dmb = [];
         var favb = [];
+        var retweetedb = [];
 
         include.forEach(function(tweet)
         {
@@ -281,6 +283,10 @@ var TweetLists = Class(
           {
             mentionb.push(tweet);
           }
+          else if (tweet.retweeted_of_me())
+          {
+            retweetedb.push(tweet);
+          }
           else
           {
             tweetb.push(tweet);
@@ -291,6 +297,7 @@ var TweetLists = Class(
         mentionb.length && this._types.mentions.prepend(mentionb);
         dmb.length && this._types.dms.prepend(dmb);
         favb.length && this._types.favs.prepend(favb);
+        retweetedb.length && this._types.retweeted.prepend(retweetedb);
         this._save();
 
         var o = this._getVelocity();
@@ -421,7 +428,8 @@ var TweetLists = Class(
     {
       saves[type] = this._types[type].serialize();
     }
-    this._lgrid.write("/tweets/0", saves);
+
+    return this._account.preferences.setAccountSet(saves);
   },
 
   restore: function()
@@ -430,12 +438,12 @@ var TweetLists = Class(
     return Co.Routine(this,
       function(r)
       {
-        return this._lgrid.read("/tweets/0");
+        return this._account.preferences.getAccountSet();
       },
       function(r)
       {
-        all = r() || {};
-        (all.lists || []).forEach(function(listinfo)
+        all = r();
+        all.lists.forEach(function(listinfo)
         {
           this.lists.append(new FilteredTweetsModel({ account: this._account, title: listinfo.title, uuid: listinfo.uuid, canRemove: true }));
         }, this);
@@ -457,9 +465,116 @@ var TweetLists = Class(
         return Co.Foreach(this, this.lists.models,
           function(list)
           {
-            return list().restore();
+            list = list();
+            return Co.Routine(this,
+              function()
+              {
+                return list.restore();
+              },
+              function(refresh)
+              {
+                if (refresh())
+                {
+                  Log.info("refresh: " + list.uuid());
+                  this._refilter(list);
+                  list.updateUnreadAndVelocity();
+                  list._save();
+                }
+                return true;
+              }
+            );
           }
         );
+      },
+      function()
+      {
+        this._account.preferences.on("listsChange", function()
+        {
+          this._refresh();
+        }, this);
+        this._account.preferences.on("listChange", function(evt, info)
+        {
+          var lists = this.lists.models;
+          for (var i = lists.length - 1; i >= 0; i--)
+          {
+            var list = lists[i];
+            if (list.uuid() === info.uuid)
+            {
+              Co.Routine(this,
+                function()
+                {
+                  return list.refresh();
+                },
+                function()
+                {
+                  this._refilter(list);
+                  list.updateUnreadAndVelocity();
+                }
+              );
+              break;
+            }
+          }
+        }, this);
+        return true;
+      }
+    );
+  },
+
+  _refresh: function()
+  {
+    var oldLists = this.lists.models;
+    var newLists;
+    return Co.Routine(this,
+      function(r)
+      {
+        return this._account.preferences.getAccountSet();
+      },
+      function(r)
+      {
+        newLists = r().lists;
+
+        var diff =
+        {
+          add: [],
+          remove: []
+        };
+        newLists.forEach(function(listinfo)
+        {
+          for (var i = oldLists.length - 1; i >= 0; i--)
+          {
+            if (oldLists[i].uuid() === listinfo.uuid)
+            {
+              return;
+            }
+          }
+          diff.add.push(new FilteredTweetsModel({ account: this._account, title: listinfo.title, uuid: listinfo.uuid, canRemove: true }));
+        }, this);
+        oldLists.forEach(function(list)
+        {
+          for (var i = newLists.length - 1; i >= 0; i--)
+          {
+            if (newLists[i].uuid === list.uuid() || !list.canRemove())
+            {
+              return;
+            }
+          }
+          diff.remove.push(list);
+        }, this);
+        diff.add.forEach(function(list)
+        {
+          this.lists.append(list);
+          list.refresh();
+          if (!list.isSearch())
+          {
+            this._refilter(list);
+          }
+        }, this);
+        diff.remove.forEach(function(list)
+        {
+          this.lists.remove(list);
+          list.remove();
+        }, this);
+        return true;
       }
     );
   }
