@@ -47,7 +47,7 @@ var TweetBox = Class(
         text = tweet.at_screen_name() + " ";
         tweet.tags().forEach(function(tag)
         {
-          if (tag.type === "screenname")
+          if (tag.type === "screenname" && tag.title.slice(1).toLowerCase() !== account.lc_screen_name)
           {
             var screen_name = tag.title + " ";
             if (screen_name !== text)
