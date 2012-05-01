@@ -14,7 +14,7 @@ var TweetLists = Class(
       mentions: new IndexedModelSet({ key: "id", limit: 200 }),
       dms: new IndexedModelSet({ key: "id", limit: 500 }),
       favs: new IndexedModelSet({ key: "id", limit: 500 }),
-      retweeted: new IndexedModelSet({ key: "id", limit: 100 })
+      retweeted: new IndexedModelSet({ key: "id", limit: 200 })
     };
   },
 
