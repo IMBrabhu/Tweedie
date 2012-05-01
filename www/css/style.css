@@ -894,6 +894,7 @@ body
   border-bottom-color: #bbb;
   border-radius: 4px;
   -webkit-transition: 0.1s linear all;
+  cursor: pointer;
 }
 .button.primary
 {
