@@ -39,6 +39,8 @@ function main()
     models.emit("update");
   });
 
+  var listCtrl = new ListController();
+
   var root = new RootView(
   {
     node: document.getElementById("root"),
@@ -56,12 +58,14 @@ function main()
     controllers:
     [
       new TweetController(),
-      new ListController(),
+      listCtrl,
       new FilterController(),
       new GlobalController(),
       new AccountController()
     ]
   });
+
+  listCtrl.open();
   
   Co.Forever(this,
     function()

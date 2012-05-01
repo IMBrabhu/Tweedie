@@ -15,6 +15,12 @@ var ListController = xo.Controller.create(
     category: "lists"
   },
 
+  open: function()
+  {
+    this._selectedListView = RootView.getViewByName("main");
+    this._selectedListView.property("selected", true);
+  },
+
   onSelectList: function(m, v, _, models)
   {
     if (models.current_list() === m)
@@ -31,10 +37,6 @@ var ListController = xo.Controller.create(
     models.current_list(m);
     m.markAllAsRead();
     this._editList(null, null);
-    if (!this._selectedListView)
-    {
-      this._selectedListView = RootView.getViewByName("main");
-    }
     if (this._selectedListView)
     {
       this._selectedListView.property("selected", false);

@@ -8,7 +8,6 @@ var SyncStorage =
   {
     window.ICloud.getCloudValue__(key, function(str)
     {
-      Log.info("Sync: get: " + key + " -> " + str);
       callback(str === null ? null : JSON.parse(str));
     });
   },

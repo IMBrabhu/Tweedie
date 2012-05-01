@@ -31,11 +31,6 @@ var SyncStorage =
       }
       callback(dict);
     }, null, "ICloudPlugin", "getKeyValues", null);
-  },
-
-  sync: function(callback)
-  {
-    callback(); // NOT YET
   }
 };
 document.addEventListener("deviceready", function()
