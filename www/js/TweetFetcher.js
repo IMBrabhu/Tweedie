@@ -23,6 +23,17 @@ var TweetFetcher = xo.Class(Events,
     this._account = account;
     this._loop = null;
     this._friends = config.friends;
+    this._tweetStatus =
+    {
+      tweets: null,
+      failed: null,
+      tweetId: "1",
+      mentionId: "1",
+      retweetId: "1",
+      favId: "1",
+      dmSendId: "1",
+      dmRecvId: "1",
+    };
   },
 
   fetchTweets: function()
@@ -41,7 +52,6 @@ var TweetFetcher = xo.Class(Events,
         }
         this.emit("login", { screen_name: r.screen_name, user_id: r.user_id });
 
-        this.abortFetch();
         this._startFetchLoop();
       }
     );
@@ -59,26 +69,16 @@ var TweetFetcher = xo.Class(Events,
 
   _startFetchLoop: function()
   {
-    this._loop = this._runUserStreamer();
-    var loop = this._loop;
-    var running;
-
-    var status =
-    {
-      tweets: null,
-      failed: null,
-      tweetId: "1",
-      mentionId: "1",
-      retweetId: "1",
-      favId: "1",
-      dmSendId: "1",
-      dmRecvId: "1",
-    };
+    this.abortFetch();
+    var loop = this._runUserStreamer();
+    this._loop = loop;
+    var running = false;
+    var status = this._tweetStatus;
 
     Co.Forever(this,
       function()
       {
-        if (loop.terminated)
+        if (loop.terminate)
         {
           return Co.Break();
         }
@@ -125,7 +125,7 @@ var TweetFetcher = xo.Class(Events,
           running = true;
           loop.run();
         }
-        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 30 : 120);
+        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 60 : 2 * 60);
       }
     );
   },
@@ -448,10 +448,12 @@ var TweetFetcher = xo.Class(Events,
           function()
           {
             config.pushRunning = true;
+            Log.info("Running fetch streamer");
             return AjaxStream.create(config);
           },
           function(r)
           {
+            Log.info("### Stopping fetch streamer");
             config.pushRunning = false;
             var reason;
             try
@@ -462,6 +464,7 @@ var TweetFetcher = xo.Class(Events,
             {
               reason = e.reason;
             }
+            Log.info("--reason=" + reason);
             switch (reason)
             {
               case "terminate":
@@ -793,6 +796,7 @@ var TweetFetcher = xo.Class(Events,
 
   _ajaxWithRetry: function(config)
   {
+    Log.info("ajaxRequest: " + config.url);
     this.emit("networkActivity", true);
     var retry = 1;
     return Co.Forever(this,
@@ -809,14 +813,14 @@ var TweetFetcher = xo.Class(Events,
         }
         catch (e)
         {
-          if (retry > 4)
+          if (retry > 4 || e.status() == 400)
           {
             this.emit("networkActivity", false);
             throw e;
           }
           else
           {
-            Co.Sleep(retry * 0.25);
+            Co.Sleep(retry * 0.5);
             retry <<= 1;
           }
         }

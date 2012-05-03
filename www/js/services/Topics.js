@@ -63,6 +63,11 @@ var Topics = {};
                 });
               });
               name2topic = hash;
+              return true;
+            },
+            function()
+            {
+              // Make sure we update even if we fail (to avoid this going DOS on Twitter)
               lastupdate = Date.now();
               lgrid.write("/topics",
               {

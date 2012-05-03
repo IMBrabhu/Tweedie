@@ -4073,27 +4073,26 @@ if (typeof XMLHttpRequest !== "undefined")
   {
     _Reply: Class(
     {
-      constructor: function(status, text)
+      constructor: function(req)
       {
-        this._status = status;
-        this._text = text;
+        this._req = req;
       },
 
       status: function()
       {
-        return this._status;
+        return this._req.status;
       },
 
       text: function()
       {
-        return this._text;
+        return this._req.responseText;
       },
 
       json: function()
       {
         if (!this._json)
         {
-          this._json = JSON.parse(this._text);
+          this._json = JSON.parse(this.text());
         }
         return this._json;
       },
@@ -4103,7 +4102,7 @@ if (typeof XMLHttpRequest !== "undefined")
         if (!this._form)
         {
           var form = this._form = {};
-          this._text.split("&").forEach(function(a)
+          this.text().split("&").forEach(function(a)
           {
             a = a.split("=");
             form[unescape(a[0])] = unescape(a[1]);
@@ -4112,15 +4111,30 @@ if (typeof XMLHttpRequest !== "undefined")
         return this._form;
       },
 
+      header: function(key)
+      {
+        if (!this._headers)
+        {
+          var headers = {};
+          this._req.getAllResponseHeaders().split("\r\n").forEach(function(header)
+          {
+            header = header.split(":");
+            headers[header[0].trim()] = header[1].trim();
+          });
+          this._headers = headers;
+        }
+        return this._headers[key];
+      },
+
       toString: function()
       {
         if (this._status === 200)
         {
-          return this._text;
+          return this.text();
         }
         else
         {
-          return "status: " + this._status;
+          return "status: " + this.status();
         }
       }
     }),
@@ -4171,7 +4185,7 @@ if (typeof XMLHttpRequest !== "undefined")
             {
               case 4: // DONE
                 // And we're done
-                var reply = new this._Reply(req.status, req.responseText);
+                var reply = new this._Reply(req);
                 if (req.status != 200)
                 {
                   throw reply;

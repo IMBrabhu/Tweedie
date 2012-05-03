@@ -4155,11 +4155,6 @@ var SyncStorage =
       }
       callback(dict);
     }, null, "ICloudPlugin", "getKeyValues", null);
-  },
-
-  sync: function(callback)
-  {
-    callback(); // NOT YET
   }
 };
 document.addEventListener("deviceready", function()
@@ -4294,11 +4289,6 @@ var SyncStorage =
       }
       callback(dict);
     }, null, "ICloudPlugin", "getKeyValues", null);
-  },
-
-  sync: function(callback)
-  {
-    callback(); // NOT YET
   }
 };
 document.addEventListener("deviceready", function()
@@ -8385,27 +8375,26 @@ if (typeof XMLHttpRequest !== "undefined")
   {
     _Reply: Class(
     {
-      constructor: function(status, text)
+      constructor: function(req)
       {
-        this._status = status;
-        this._text = text;
+        this._req = req;
       },
 
       status: function()
       {
-        return this._status;
+        return this._req.status;
       },
 
       text: function()
       {
-        return this._text;
+        return this._req.responseText;
       },
 
       json: function()
       {
         if (!this._json)
         {
-          this._json = JSON.parse(this._text);
+          this._json = JSON.parse(this.text());
         }
         return this._json;
       },
@@ -8415,7 +8404,7 @@ if (typeof XMLHttpRequest !== "undefined")
         if (!this._form)
         {
           var form = this._form = {};
-          this._text.split("&").forEach(function(a)
+          this.text().split("&").forEach(function(a)
           {
             a = a.split("=");
             form[unescape(a[0])] = unescape(a[1]);
@@ -8424,15 +8413,30 @@ if (typeof XMLHttpRequest !== "undefined")
         return this._form;
       },
 
+      header: function(key)
+      {
+        if (!this._headers)
+        {
+          var headers = {};
+          this._req.getAllResponseHeaders().split("\r\n").forEach(function(header)
+          {
+            header = header.split(":");
+            headers[header[0].trim()] = header[1].trim();
+          });
+          this._headers = headers;
+        }
+        return this._headers[key];
+      },
+
       toString: function()
       {
         if (this._status === 200)
         {
-          return this._text;
+          return this.text();
         }
         else
         {
-          return "status: " + this._status;
+          return "status: " + this.status();
         }
       }
     }),
@@ -8483,7 +8487,7 @@ if (typeof XMLHttpRequest !== "undefined")
             {
               case 4: // DONE
                 // And we're done
-                var reply = new this._Reply(req.status, req.responseText);
+                var reply = new this._Reply(req);
                 if (req.status != 200)
                 {
                   throw reply;
@@ -9823,11 +9827,10 @@ var KEYS =
   ga: "UA-28788100-1"
 };
 
-//if (!xo.Environment.isTouch())
-//{
-//  KEYS.twitter.oauth_consumer_key = "kdL4SnvW5p1ZMJyUW6ukA";
-//  KEYS.twitter.oauth_consumer_secret = "GdtvGSATXv2N5k4kGIviECvxdHDMYEa9OstyaVxnpY";
-//}
+if (!xo.Environment.isTouch())
+{
+  KEYS.ga = "UA-28788100-2";
+}
 var Co = xo.Co;
 var Class = xo.Class;
 var Log = xo.Log;
@@ -11224,7 +11227,7 @@ var TweetLists = Class(
       mentions: new IndexedModelSet({ key: "id", limit: 200 }),
       dms: new IndexedModelSet({ key: "id", limit: 500 }),
       favs: new IndexedModelSet({ key: "id", limit: 500 }),
-      retweeted: new IndexedModelSet({ key: "id", limit: 100 })
+      retweeted: new IndexedModelSet({ key: "id", limit: 200 })
     };
   },
 
@@ -11814,6 +11817,17 @@ var TweetFetcher = xo.Class(Events,
     this._account = account;
     this._loop = null;
     this._friends = config.friends;
+    this._tweetStatus =
+    {
+      tweets: null,
+      failed: null,
+      tweetId: "1",
+      mentionId: "1",
+      retweetId: "1",
+      favId: "1",
+      dmSendId: "1",
+      dmRecvId: "1",
+    };
   },
 
   fetchTweets: function()
@@ -11832,7 +11846,6 @@ var TweetFetcher = xo.Class(Events,
         }
         this.emit("login", { screen_name: r.screen_name, user_id: r.user_id });
 
-        this.abortFetch();
         this._startFetchLoop();
       }
     );
@@ -11850,26 +11863,16 @@ var TweetFetcher = xo.Class(Events,
 
   _startFetchLoop: function()
   {
-    this._loop = this._runUserStreamer();
-    var loop = this._loop;
-    var running;
-
-    var status =
-    {
-      tweets: null,
-      failed: null,
-      tweetId: "1",
-      mentionId: "1",
-      retweetId: "1",
-      favId: "1",
-      dmSendId: "1",
-      dmRecvId: "1",
-    };
+    this.abortFetch();
+    var loop = this._runUserStreamer();
+    this._loop = loop;
+    var running = false;
+    var status = this._tweetStatus;
 
     Co.Forever(this,
       function()
       {
-        if (loop.terminated)
+        if (loop.terminate)
         {
           return Co.Break();
         }
@@ -11916,7 +11919,7 @@ var TweetFetcher = xo.Class(Events,
           running = true;
           loop.run();
         }
-        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 30 : 120);
+        return Co.Sleep(status.failed.length === 0 && loop.pushRunning ? 60 * 60 : 2 * 60);
       }
     );
   },
@@ -12239,10 +12242,12 @@ var TweetFetcher = xo.Class(Events,
           function()
           {
             config.pushRunning = true;
+            Log.info("Running fetch streamer");
             return AjaxStream.create(config);
           },
           function(r)
           {
+            Log.info("### Stopping fetch streamer");
             config.pushRunning = false;
             var reason;
             try
@@ -12253,6 +12258,7 @@ var TweetFetcher = xo.Class(Events,
             {
               reason = e.reason;
             }
+            Log.info("--reason=" + reason);
             switch (reason)
             {
               case "terminate":
@@ -12584,6 +12590,7 @@ var TweetFetcher = xo.Class(Events,
 
   _ajaxWithRetry: function(config)
   {
+    Log.info("ajaxRequest: " + config.url);
     this.emit("networkActivity", true);
     var retry = 1;
     return Co.Forever(this,
@@ -12600,14 +12607,14 @@ var TweetFetcher = xo.Class(Events,
         }
         catch (e)
         {
-          if (retry > 4)
+          if (retry > 4 || e.status() == 400)
           {
             this.emit("networkActivity", false);
             throw e;
           }
           else
           {
-            Co.Sleep(retry * 0.25);
+            Co.Sleep(retry * 0.5);
             retry <<= 1;
           }
         }
@@ -14210,6 +14217,11 @@ var Topics = {};
                 });
               });
               name2topic = hash;
+              return true;
+            },
+            function()
+            {
+              // Make sure we update even if we fail (to avoid this going DOS on Twitter)
               lastupdate = Date.now();
               lgrid.write("/topics",
               {
@@ -14622,6 +14634,12 @@ var ListController = xo.Controller.create(
     category: "lists"
   },
 
+  open: function()
+  {
+    this._selectedListView = RootView.getViewByName("main");
+    this._selectedListView.property("selected", true);
+  },
+
   onSelectList: function(m, v, _, models)
   {
     if (models.current_list() === m)
@@ -14638,10 +14656,6 @@ var ListController = xo.Controller.create(
     models.current_list(m);
     m.markAllAsRead();
     this._editList(null, null);
-    if (!this._selectedListView)
-    {
-      this._selectedListView = RootView.getViewByName("main");
-    }
     if (this._selectedListView)
     {
       this._selectedListView.property("selected", false);
@@ -15262,6 +15276,8 @@ function main()
     models.emit("update");
   });
 
+  var listCtrl = new ListController();
+
   var root = new RootView(
   {
     node: document.getElementById("root"),
@@ -15279,12 +15295,14 @@ function main()
     controllers:
     [
       new TweetController(),
-      new ListController(),
+      listCtrl,
       new FilterController(),
       new GlobalController(),
       new AccountController()
     ]
   });
+
+  listCtrl.open();
   
   Co.Forever(this,
     function()
