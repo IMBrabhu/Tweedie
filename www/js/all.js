@@ -15322,7 +15322,7 @@ function main()
       return Co.Sleep(10);
     }
   );
-  
+
   Co.Routine(this,
     function()
     {
@@ -15356,6 +15356,17 @@ function main()
           }
         });
       }
+    }
+  );
+
+  Co.Routine(this,
+    function()
+    {
+      return Co.Sleep(5);
+    },
+    function()
+    {
+      splash();
     }
   );
 }
