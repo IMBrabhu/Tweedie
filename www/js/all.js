@@ -5972,6 +5972,7 @@ var FilteredModelSet = exports.FilteredModelSet = Class(IndexedModelSet,
   {
     this._include = [];
     this._exclude = [];
+    this._defaultInclude = values.defaultInclude || true;
     __super(values);
   },
 
@@ -6116,14 +6117,17 @@ var FilteredModelSet = exports.FilteredModelSet = Class(IndexedModelSet,
       }
     }
     filters = this._exclude;
-    for (var i = 0, len = filters.length; i < len; i++)
+    if (filters.length)
     {
-      if (filters[i].call(this, model))
+      for (var i = 0, len = filters.length; i < len; i++)
       {
-        return false;
+        if (filters[i].call(this, model))
+        {
+          return false;
+        }
       }
     }
-    return true;
+    return this._defaultInclude;
   }
 });
 var View = exports.View = Class(Model,
@@ -8557,6 +8561,15 @@ if (typeof XMLHttpRequest !== "undefined")
       return Co.Routine(this,
         function()
         {
+          if (!config.headers)
+          {
+            config.headers = {};
+          }
+          if (!config.headers["Content-Type"])
+          {
+            config.headers["Content-Type"] = "application/x-www-form-urlencoded";
+          }
+
           config.auth && config.auth.sign(config);
 
           var req = this._req = new XMLHttpRequest();
@@ -9999,7 +10012,8 @@ var Tweet = Model.create(
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
-      in_reply_to_status_id_str: values.in_reply_to_status_id_str
+      in_reply_to_status_id_str: values.in_reply_to_status_id_str,
+      is_search: values.is_search
     }
   },
 
@@ -10416,6 +10430,11 @@ var Tweet = Model.create(
     return this.hasTagKey(Tweet.MentionTag.hashkey);
   },
 
+  isSearch: function()
+  {
+    return this._values.is_search || false;
+  },
+
   hasTagKey: function(key)
   {
     return this.tagsHash()[key] || false;
@@ -10726,6 +10745,11 @@ var Tweet = Model.create(
     var fullname = url.pathname + url.search + url.hash;
     var pathname = fullname.slice(0, 15);
     return url.hostname + pathname + (fullname === pathname ? "" : "...");
+  },
+
+  match: function(query)
+  {
+    return (this.is_retweet() ? this.retweet() : this).text().toLowerCase().indexOf(query) !== -1;
   }
 }).statics(
 {
@@ -10850,6 +10874,9 @@ var FilteredTweetsModel = Model.create(
         {
           this._save();
         }, this);
+
+        this._manageSearch();
+
         return r;
       }
     );
@@ -10959,18 +10986,31 @@ var FilteredTweetsModel = Model.create(
 
   isSearch: function()
   {
-    return this.title().slice(-1) === "?";
+    return this._isSearch;
   },
 
-  asSearch: function()
+  _manageSearch: function()
   {
-    if (!this.isSearch())
+    this._isSearch = this.title().slice(-1) === "?";
+    var nquery = this._isSearch ? this.title().slice(0, -1).toLowerCase() : null;
+    if (this._searchQuery != nquery)
     {
-      return null;
-    }
-    else
-    {
-      return this.title().slice(0, -1);
+      if (this._searchQuery)
+      {
+        this._account.removeSearch(this._searchQuery);
+        this.tweets().removeExcludeFilter(this._searchExcludeFilter);
+      }
+      this._searchQuery = nquery;
+      if (this._searchQuery)
+      {
+        var query = this._searchQuery;
+        this._searchExcludeFilter = function(tweet)
+        {
+          return !tweet.match(query);
+        };
+        this.tweets().addExcludeFilter(this._searchExcludeFilter);
+        this._account.addSearch(this._searchQuery);
+      }
     }
   },
 
@@ -11089,6 +11129,8 @@ var FilteredTweetsModel = Model.create(
   {
     this._removed = true;
     this._account.preferences.removeAccountList(this.uuid());
+    this.title("");
+    this._manageSearch();
   },
 
   _save: function()
@@ -11104,6 +11146,7 @@ var FilteredTweetsModel = Model.create(
         viz: this.viz(),
         tweets: this.tweets().serialize().map(function(tweet) { return tweet.id_str; })
       });
+      this._manageSearch();
     }
   },
 
@@ -11227,7 +11270,8 @@ var TweetLists = Class(
       mentions: new IndexedModelSet({ key: "id", limit: 200 }),
       dms: new IndexedModelSet({ key: "id", limit: 500 }),
       favs: new IndexedModelSet({ key: "id", limit: 500 }),
-      retweeted: new IndexedModelSet({ key: "id", limit: 200 })
+      retweeted: new IndexedModelSet({ key: "id", limit: 200 }),
+      searches: new IndexedModelSet({ key: "id", limit: 2000 }),
     };
   },
 
@@ -11263,10 +11307,24 @@ var TweetLists = Class(
     });
   },
 
+  getAllTweets: function(includeSearch)
+  {
+    var tweets = [];
+    for (var type in this._types)
+    {
+      if (includeSearch || type !== "searches")
+      {
+        tweets = tweets.concat(this._types[type].models);
+      }
+    }
+    tweets.sort(Tweet.compareTweets);
+    return tweets;
+  },
+
   createList: function(name, refilter)
   {
     var list = new FilteredTweetsModel({ account: this._account, title: name, uuid: xo.Uuid.create(), canEdit: true, canRemove: true });
-    if (!list.isSearch() && refilter)
+    if (refilter)
     {
       this._refilter(list);
     }
@@ -11361,13 +11419,7 @@ var TweetLists = Class(
     listtweets.removeAll();
     if (!list.isSearch())
     {
-      var tweets = [];
-      for (var type in this._types)
-      {
-        tweets = tweets.concat(this._types[type].models);
-      }
-      tweets.sort(Tweet.compareTweets);
-      listtweets.append(tweets);
+      listtweets.append(this.getAllTweets(false));
     }
     Log.timeEnd("_refilter");
   },
@@ -11549,7 +11601,8 @@ var TweetLists = Class(
   addSearch: function(tweets)
   {
     tweets = this._separateTweets(tweets);
-    if (tweets.include.length || tweets.exclude.length)
+    var include = tweets.include;
+    if (include.length)
     {
       return Co.Routine(this,
         function()
@@ -11558,18 +11611,19 @@ var TweetLists = Class(
         },
         function()
         {
-          var all = tweets.all;
+          this._types.searches.prepend(include);
+
           var o = this._getVelocity();
           this.lists.forEach(function(list)
           {
             if (list.isSearch())
             {
-              list.addTweets(all);
+              list.addTweets(include);
               list.recalcVelocity(o);
             }
           });
 
-          return all.length;
+          return include.length;
         }
       );
     }
@@ -11827,6 +11881,11 @@ var TweetFetcher = xo.Class(Events,
       favId: "1",
       dmSendId: "1",
       dmRecvId: "1",
+    };
+    this._searchStatus =
+    {
+      queries: [],
+      callbacks: []
     };
   },
 
@@ -12242,12 +12301,10 @@ var TweetFetcher = xo.Class(Events,
           function()
           {
             config.pushRunning = true;
-            Log.info("Running fetch streamer");
             return AjaxStream.create(config);
           },
           function(r)
           {
-            Log.info("### Stopping fetch streamer");
             config.pushRunning = false;
             var reason;
             try
@@ -12258,7 +12315,6 @@ var TweetFetcher = xo.Class(Events,
             {
               reason = e.reason;
             }
-            Log.info("--reason=" + reason);
             switch (reason)
             {
               case "terminate":
@@ -12283,15 +12339,61 @@ var TweetFetcher = xo.Class(Events,
     return config;
   },
 
-  fetchSearch: function(query)
+  addSearch: function(query)
   {
-    this.abortSearch();
-    this._searchLoop = this._runSearchStreamer([ query ]);
+    this._searchStatus.queries.push(query);
+    this.restartSearch();
+  },
+
+  removeSearch: function(query)
+  {
+    var queries = this._searchStatus.queries;
+    for (var i = queries.length - 1; i >= 0; i--)
+    {
+      if (queries[i] === query)
+      {
+        queries.splice(i, 1);
+        this.restartSearch();
+        return true;
+      }
+    }
+    return false;
+  },
+
+  restartSearch: function()
+  {
+    if (!this._restartingSearch)
+    {
+      this._restartingSearch = true;
+      Co.Routine(this,
+        function()
+        {
+          return Co.Sleep(1);
+        },
+        function()
+        {
+          this._restartingSearch = false;
+          this.stopSearch();
+          if (this._searchStatus.queries.length)
+          {
+            this.startSearch();
+          }
+        }
+      );
+    }
+  },
+
+  startSearch: function()
+  {
+    var status = this._searchStatus;
+    var search = this._runSearchStreamer(status.queries);
+    this._searchLoop = search;
 
     var config =
     {
       method: "GET",
-      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + encodeURIComponent(query),
+      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + 
+        encodeURIComponent(this._searchStatus.queries.join(" OR ")),
       auth: this._auth
     };
     return Co.Routine(this,
@@ -12303,20 +12405,25 @@ var TweetFetcher = xo.Class(Events,
       {
         try
         {
-          var json = r().json();
-          this.emit("searches", json.results);
+          this.emit("searches", r().json().results);
         }
         catch (e)
         {
           Log.exception("fetchSearch", e);
         }
-        this._searchLoop.run();
+        search.run();
         return true;
       }
     );
   },
 
-  abortSearch: function()
+  clearSearch: function()
+  {
+    this.stopSearch();
+    this._searchStatus.queries = [];
+  },
+
+  stopSearch: function()
   {
     if (this._searchLoop)
     {
@@ -12334,8 +12441,9 @@ var TweetFetcher = xo.Class(Events,
     var timer = null;
     var config =
     {
-      method: "GET",
-      url: "https://stream.twitter.com/1/statuses/filter.json?track=" + query.map(encodeURIComponent).join(","),
+      method: "POST",
+      url: "https://stream.twitter.com/1/statuses/filter.json",
+      data: "track=" + this._searchStatus.queries.join(","),
       auth: this._auth,
       onText: function(chunk)
       {
@@ -12415,7 +12523,7 @@ var TweetFetcher = xo.Class(Events,
 
               default:
                 Log.info("Sleeping");
-                return Co.Sleep(30);
+                return Co.Sleep(120);
             }
           }
         );
@@ -12787,13 +12895,14 @@ var Account = Class(Events,
         function online()
         {
           self._fetcher.abortFetch();
-          self._fetcher.abortSearch();
+          self._fetcher.stopSearch();
           self.fetch();
+          self._fetcher.startSearch();
         }
         function offline()
         {
           self._fetcher.abortFetch();
-          self._fetcher.abortSearch();
+          self._fetcher.stopSearch();
         }
         document.addEventListener("online", online);
         document.addEventListener("offline", offline);
@@ -13017,9 +13126,31 @@ var Account = Class(Events,
     );
   },
 
-  search: function(query)
+  addSearch: function(query)
   {
-    return this._fetcher.fetchSearch(query);
+    return this._fetcher.addSearch(query);
+  },
+
+  removeSearch: function(query)
+  {
+    return this._fetcher.removeSearch(query);
+  },
+
+  _followingHashtags: {},
+
+  isFollowingHashtag: function(hashtag)
+  {
+    return hashtag in this._followingHashtags;
+  },
+
+  unfollowHashtag: function(hashtag)
+  {
+    delete this._followingHashtags[hashtag];
+  },
+
+  followHashtag: function(hashtag)
+  {
+    this._followingHashtags[hashtag] = true;
   },
 
   serialize: function()
@@ -14550,6 +14681,47 @@ var TweetController = xo.Controller.create(
     );
   },
 
+  onHashtag: function(_, _, e, models)
+  {
+    this.metric("hashtag:open");
+    var hashtag = e.actionTarget.innerText;
+    var m = new (Model.create(
+    {
+      name: Model.Property,
+      followed_by: Model.Property
+    }))(
+    {
+      name: hashtag,
+      followed_by: models.account().isFollowingHashtag(hashtag)
+    });
+    new ModalView(
+    {
+      node: document.getElementById("root-dialog"),
+      template: __resources.hashtag_dialog,
+      partials: __resources,
+      model: m,
+      controller: new (xo.Controller.create(
+      {
+        metrics:
+        {
+          category: "hashtag_dialog"
+        },
+        onFollow: function()
+        {
+          this.metric("follow");
+          m.followed_by(true);
+          models.account().followHashtag(hashtag);
+        },
+        onUnfollow: function()
+        {
+          this.metric("unfollow");
+          m.followed_by(false);
+          models.account().unfollowHashtag(hashtag);
+        }
+      }))
+    });
+  },
+
   onOpenTweet: function(_, v, e)
   {
     var nested = v.node().querySelector(".nested-tweets");
@@ -14651,7 +14823,7 @@ var ListController = xo.Controller.create(
     document.getElementById("filter").value = "";
     RootView.getViewByName("tweets").filterText("");
 
-    PrimaryFetcher && PrimaryFetcher.abortSearch();
+    //PrimaryFetcher && PrimaryFetcher.clearSearch();
 
     models.current_list(m);
     m.markAllAsRead();
@@ -14664,16 +14836,17 @@ var ListController = xo.Controller.create(
     this._selectedListView = v;
     this._selectedListView.property("selected", true);
 
-    var query = m.asSearch();
+    /*var query = m.asSearch();
     if (query)
     {
       this.metric("select:search");
-      models.account().search(query);
+      //models.account().search(query);
     }
     else
     {
       this.metric("select:list");
-    }
+    }*/
+    this.metric(m.isSearch() ? "select:search" : "select:list");
   },
 
   onDropToList: function(m, v, _, models)
@@ -14983,6 +15156,26 @@ var AccountController = xo.Controller.create(
     {{^has_errors}}\
       No problems.\
     {{/has_errors}}\
+  </div>\
+</div>',
+'hashtag_dialog': '<div class="dialog tweet-profile">\
+  <div class="border" data-action-click="Ignore">\
+      <div class="inner">\
+      <div class="left">\
+        <img class="icon" src="/img/hashtag.png">\
+        <div class="body">\
+          <span class="hashtag-name">{{name}}</span>\
+        </div>\
+      </div>\
+      <div class="right">\
+        {{#followed_by}}\
+          <div class="button unfollow" data-action-click="Unfollow">Unfollow</div>\
+        {{/followed_by}}\
+        {{^followed_by}}\
+          <div class="button follow" data-action-click="Follow">Follow</div>\
+        {{/followed_by}}\
+      </div>\
+    </div>\
   </div>\
 </div>',
 'imageview': '<div class="dialog image-view">\

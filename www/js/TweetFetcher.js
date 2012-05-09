@@ -34,6 +34,11 @@ var TweetFetcher = xo.Class(Events,
       dmSendId: "1",
       dmRecvId: "1",
     };
+    this._searchStatus =
+    {
+      queries: [],
+      callbacks: []
+    };
   },
 
   fetchTweets: function()
@@ -448,12 +453,10 @@ var TweetFetcher = xo.Class(Events,
           function()
           {
             config.pushRunning = true;
-            Log.info("Running fetch streamer");
             return AjaxStream.create(config);
           },
           function(r)
           {
-            Log.info("### Stopping fetch streamer");
             config.pushRunning = false;
             var reason;
             try
@@ -464,7 +467,6 @@ var TweetFetcher = xo.Class(Events,
             {
               reason = e.reason;
             }
-            Log.info("--reason=" + reason);
             switch (reason)
             {
               case "terminate":
@@ -489,15 +491,61 @@ var TweetFetcher = xo.Class(Events,
     return config;
   },
 
-  fetchSearch: function(query)
+  addSearch: function(query)
   {
-    this.abortSearch();
-    this._searchLoop = this._runSearchStreamer([ query ]);
+    this._searchStatus.queries.push(query);
+    this.restartSearch();
+  },
+
+  removeSearch: function(query)
+  {
+    var queries = this._searchStatus.queries;
+    for (var i = queries.length - 1; i >= 0; i--)
+    {
+      if (queries[i] === query)
+      {
+        queries.splice(i, 1);
+        this.restartSearch();
+        return true;
+      }
+    }
+    return false;
+  },
+
+  restartSearch: function()
+  {
+    if (!this._restartingSearch)
+    {
+      this._restartingSearch = true;
+      Co.Routine(this,
+        function()
+        {
+          return Co.Sleep(1);
+        },
+        function()
+        {
+          this._restartingSearch = false;
+          this.stopSearch();
+          if (this._searchStatus.queries.length)
+          {
+            this.startSearch();
+          }
+        }
+      );
+    }
+  },
+
+  startSearch: function()
+  {
+    var status = this._searchStatus;
+    var search = this._runSearchStreamer(status.queries);
+    this._searchLoop = search;
 
     var config =
     {
       method: "GET",
-      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + encodeURIComponent(query),
+      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + 
+        encodeURIComponent(this._searchStatus.queries.join(" OR ")),
       auth: this._auth
     };
     return Co.Routine(this,
@@ -509,20 +557,25 @@ var TweetFetcher = xo.Class(Events,
       {
         try
         {
-          var json = r().json();
-          this.emit("searches", json.results);
+          this.emit("searches", r().json().results);
         }
         catch (e)
         {
           Log.exception("fetchSearch", e);
         }
-        this._searchLoop.run();
+        search.run();
         return true;
       }
     );
   },
 
-  abortSearch: function()
+  clearSearch: function()
+  {
+    this.stopSearch();
+    this._searchStatus.queries = [];
+  },
+
+  stopSearch: function()
   {
     if (this._searchLoop)
     {
@@ -540,8 +593,9 @@ var TweetFetcher = xo.Class(Events,
     var timer = null;
     var config =
     {
-      method: "GET",
-      url: "https://stream.twitter.com/1/statuses/filter.json?track=" + query.map(encodeURIComponent).join(","),
+      method: "POST",
+      url: "https://stream.twitter.com/1/statuses/filter.json",
+      data: "track=" + this._searchStatus.queries.join(","),
       auth: this._auth,
       onText: function(chunk)
       {
@@ -621,7 +675,7 @@ var TweetFetcher = xo.Class(Events,
 
               default:
                 Log.info("Sleeping");
-                return Co.Sleep(30);
+                return Co.Sleep(120);
             }
           }
         );
@@ -632,13 +686,13 @@ var TweetFetcher = xo.Class(Events,
 
   isFriend: function(user)
   {
-    if (!this._friends.length || user.screen_name === this._account.userInfo.screen_name)
+    if (!this._friends.length || (user.screen_name || user.from_user_name) === this._account.userInfo.screen_name)
     {
       return true;
     }
     else
     {
-      return this._friends.indexOf(parseInt(user.id_str)) !== -1;
+      return this._friends.indexOf(parseInt(user.id_str || user.from_user_id_str)) !== -1;
     }
   },
 

@@ -14,7 +14,8 @@ var TweetLists = Class(
       mentions: new IndexedModelSet({ key: "id", limit: 200 }),
       dms: new IndexedModelSet({ key: "id", limit: 500 }),
       favs: new IndexedModelSet({ key: "id", limit: 500 }),
-      retweeted: new IndexedModelSet({ key: "id", limit: 200 })
+      retweeted: new IndexedModelSet({ key: "id", limit: 200 }),
+      searches: new IndexedModelSet({ key: "id", limit: 2000 }),
     };
   },
 
@@ -50,10 +51,24 @@ var TweetLists = Class(
     });
   },
 
+  getAllTweets: function(includeSearch)
+  {
+    var tweets = [];
+    for (var type in this._types)
+    {
+      if (includeSearch || type !== "searches")
+      {
+        tweets = tweets.concat(this._types[type].models);
+      }
+    }
+    tweets.sort(Tweet.compareTweets);
+    return tweets;
+  },
+
   createList: function(name, refilter)
   {
     var list = new FilteredTweetsModel({ account: this._account, title: name, uuid: xo.Uuid.create(), canEdit: true, canRemove: true });
-    if (!list.isSearch() && refilter)
+    if (refilter)
     {
       this._refilter(list);
     }
@@ -148,13 +163,7 @@ var TweetLists = Class(
     listtweets.removeAll();
     if (!list.isSearch())
     {
-      var tweets = [];
-      for (var type in this._types)
-      {
-        tweets = tweets.concat(this._types[type].models);
-      }
-      tweets.sort(Tweet.compareTweets);
-      listtweets.append(tweets);
+      listtweets.append(this.getAllTweets(false));
     }
     Log.timeEnd("_refilter");
   },
@@ -336,7 +345,8 @@ var TweetLists = Class(
   addSearch: function(tweets)
   {
     tweets = this._separateTweets(tweets);
-    if (tweets.include.length || tweets.exclude.length)
+    var include = tweets.include;
+    if (include.length)
     {
       return Co.Routine(this,
         function()
@@ -345,18 +355,19 @@ var TweetLists = Class(
         },
         function()
         {
-          var all = tweets.all;
+          this._types.searches.prepend(include);
+
           var o = this._getVelocity();
           this.lists.forEach(function(list)
           {
             if (list.isSearch())
             {
-              list.addTweets(all);
+              list.addTweets(include);
               list.recalcVelocity(o);
             }
           });
 
-          return all.length;
+          return include.length;
         }
       );
     }

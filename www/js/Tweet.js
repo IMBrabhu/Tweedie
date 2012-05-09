@@ -29,6 +29,7 @@ var Tweet = Model.create(
       recipient: values.recipient && { name: values.recipient.name, screen_name: values.recipient.screen_name, id_str: values.recipient.id_str, lang: values.recipient.lang },
       from_user_name: values.from_user_name,
       from_user: values.from_user,
+      from_user_id_str: values.from_user_id_str,
       iso_language_code: values.iso_language_code,
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
@@ -37,7 +38,8 @@ var Tweet = Model.create(
       place: values.place && { full_name: values.place.full_name, id: values.place.id },
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
-      in_reply_to_status_id_str: values.in_reply_to_status_id_str
+      in_reply_to_status_id_str: values.in_reply_to_status_id_str,
+      is_search: values.is_search
     }
   },
 
@@ -454,6 +456,11 @@ var Tweet = Model.create(
     return this.hasTagKey(Tweet.MentionTag.hashkey);
   },
 
+  isSearch: function()
+  {
+    return this._values.is_search || false;
+  },
+
   hasTagKey: function(key)
   {
     return this.tagsHash()[key] || false;
@@ -764,6 +771,11 @@ var Tweet = Model.create(
     var fullname = url.pathname + url.search + url.hash;
     var pathname = fullname.slice(0, 15);
     return url.hostname + pathname + (fullname === pathname ? "" : "...");
+  },
+
+  match: function(query)
+  {
+    return (this.is_retweet() ? this.retweet() : this).text().toLowerCase().indexOf(query) !== -1;
   }
 }).statics(
 {
@@ -832,6 +844,22 @@ var Tweet = Model.create(
     {
       return 0;
     }
+  },
+
+  hasHashtag: function(tweet, tags)
+  {
+    var hashtags = tweet.entities && tweet.entities.hashtags;
+    if (hashtags)
+    {
+      for (var i = hashtags.length - 1; i >= 0; i--)
+      {
+        if (tags.indexOf(hashtags[i].text.toLowerCase()) !== -1)
+        {
+          return true;
+        }
+      }
+    }
+    return false;
   },
 
   TweetTag: { title: "Tweet", type: "tweet", key: "tweet", hashkey: "tweet:tweet" },

@@ -2,7 +2,8 @@ var Preferences = Class(Events,
 {
   constructor: function(base)
   {
-    this._base = base;
+    this._base = "/tweets/" + base;
+    this._hbase = "/hashtags/" + base;
     this._grid = grid.get();
     if (typeof SyncStorage !== "undefined")
     {
@@ -18,6 +19,10 @@ var Preferences = Class(Events,
           {
             // List have changed.
             this.emit("listsChange");
+          }
+          else if (key === this._base + "/hashtags")
+          {
+            this.emit("hashtagsChange");
           }
           else if (key.indexOf(this._base + "/") === 0)
           {
@@ -163,5 +168,41 @@ var Preferences = Class(Events,
     var id = this._base + "/" + uuid;
     this._sync.remove(id);
     return this._grid.remove(id);
+  },
+
+  getFollowedHashtags: function()
+  {
+    var id = this._hbase + "/following";
+    var data;
+    return Co.Routine(this,
+      function(r)
+      {
+        return this._grid.read(id);
+      },
+      function(r)
+      {
+        data = r() || [];
+        this._sync.get(id, Co.Callback(this, function(tags)
+        {
+          return tags;
+        }));
+      },
+      function(tags)
+      {
+        tags = tags();
+        if (tags)
+        {
+          data = tags;
+        }
+        return data;
+      }
+    );
+  },
+
+  setFollowedHashtags: function(hashtags)
+  {
+    var id = this._hbase + "/following";
+    this._grid.write(id, hashtags);
+    this._sync.set(id, hashtags);
   }
 });

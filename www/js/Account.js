@@ -5,7 +5,8 @@ var Account = Class(Events,
     this.tweetLists = new TweetLists(this);
     this.errors = new Errors(this);
     this.userAndTags = new UsersAndTags(this);
-    this.preferences = new Preferences("/tweets/0");
+    this.preferences = new Preferences("0");
+    this._followingHashtags = [];
   },
 
   open: function()
@@ -74,6 +75,54 @@ var Account = Class(Events,
       },
       function()
       {
+        return this.preferences.getFollowedHashtags();
+      },
+      function(hashtags)
+      {
+        this._followingHashtags = hashtags();
+        this.preferences.on("hashtagsChange", function()
+        {
+          Co.Routine(this,
+            function()
+            {
+              return this.preferences.getFollowedHashtags();
+            },
+            function(hashtags)
+            {
+              hashtags = hashtags();
+              var ohashtags = this._followingHashtags;
+              var atags = [];
+              var rtags = [];
+              hashtags.forEach(function(tag)
+              {
+                if (ohashtags.indexOf(tag) === -1)
+                {
+                  atags.push(tag);
+                }
+              });
+              ohashtags.forEach(function(tag)
+              {
+                if (hashtags.indexOf(tag) === -1)
+                {
+                  rtags.push(tag);
+                }
+              });
+              atags.forEach(function(tag)
+              {
+                this.followHashtag(tag);
+              }, this);
+              rtags.forEach(function(tag)
+              {
+                this.unfollowHashtag(tag);
+              }, this);
+            }
+          );
+        }, this);
+        this._followingHashtags.forEach(function(tag)
+        {
+          this.followHashtag(tag);
+        }, this);
+
         this._fetcher.on("tweets", function(evt, tweets)
         {
           this.tweetLists.addTweets(tweets);
@@ -85,6 +134,7 @@ var Account = Class(Events,
         this._fetcher.on("searches", function(evt, tweets)
         {
           this.tweetLists.addSearch(tweets);
+          this._addFollowedHashtags(tweets);
         }, this);
         this._fetcher.on("favs", function(evt, tweets)
         {
@@ -104,13 +154,14 @@ var Account = Class(Events,
         function online()
         {
           self._fetcher.abortFetch();
-          self._fetcher.abortSearch();
+          self._fetcher.stopSearch();
           self.fetch();
+          self._fetcher.startSearch();
         }
         function offline()
         {
           self._fetcher.abortFetch();
-          self._fetcher.abortSearch();
+          self._fetcher.stopSearch();
         }
         document.addEventListener("online", online);
         document.addEventListener("offline", offline);
@@ -334,9 +385,51 @@ var Account = Class(Events,
     );
   },
 
-  search: function(query)
+  addSearch: function(query)
   {
-    return this._fetcher.fetchSearch(query);
+    return this._fetcher.addSearch(query);
+  },
+
+  removeSearch: function(query)
+  {
+    return this._fetcher.removeSearch(query);
+  },
+
+  isFollowingHashtag: function(hashtag)
+  {
+    return this._followingHashtags.indexOf(hashtag.slice(1).toLowerCase()) !== -1;
+  },
+
+  unfollowHashtag: function(hashtag)
+  {
+    var idx = this._followingHashtags.indexOf(hashtag.slice(1).toLowerCase());
+    if (idx !== -1)
+    {
+      this._followingHashtags.splice(idx, 1);
+      this.removeSearch(hashtag);
+      this.preferences.setFollowedHashtags(this._followingHashtags);
+    }
+  },
+
+  followHashtag: function(hashtag)
+  {
+    this._followingHashtags.push(hashtag.slice(1).toLowerCase());
+    this.addSearch(hashtag);
+    this.preferences.setFollowedHashtags(this._followingHashtags);
+  },
+
+  _addFollowedHashtags: function(tweets)
+  {
+    var hashtags = this._followingHashtags;
+    var match = [];
+    tweets.forEach(function(tweet)
+    {
+      if (Tweet.hasHashtag(tweet, hashtags))
+      {
+        match.push(tweet);
+      }
+    });
+    match.length && this.tweetLists.addTweets(match);
   },
 
   serialize: function()

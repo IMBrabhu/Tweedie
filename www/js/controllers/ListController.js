@@ -32,8 +32,6 @@ var ListController = xo.Controller.create(
     document.getElementById("filter").value = "";
     RootView.getViewByName("tweets").filterText("");
 
-    PrimaryFetcher && PrimaryFetcher.abortSearch();
-
     models.current_list(m);
     m.markAllAsRead();
     this._editList(null, null);
@@ -45,16 +43,7 @@ var ListController = xo.Controller.create(
     this._selectedListView = v;
     this._selectedListView.property("selected", true);
 
-    var query = m.asSearch();
-    if (query)
-    {
-      this.metric("select:search");
-      models.account().search(query);
-    }
-    else
-    {
-      this.metric("select:list");
-    }
+    this.metric(m.isSearch() ? "select:search" : "select:list");
   },
 
   onDropToList: function(m, v, _, models)

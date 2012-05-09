@@ -1110,6 +1110,8 @@ body
   background-color: white;
   border-radius: 5px;
   -webkit-box-shadow: 0 0 10px #444;
+  max-width: 600px;
+  margin: 0px auto;
 }
 .tweet-profile .background
 {
@@ -1118,7 +1120,7 @@ body
 }
 .tweet-profile .inner
 {
-  min-height: 165px;
+  x-min-height: 165px;
   background-color: rgba(255,255,255,0.9);
   -webkit-box-shadow: none;
   border-radius: 0;

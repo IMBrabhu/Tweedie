@@ -40,6 +40,9 @@ var FilteredTweetsModel = Model.create(
         {
           this._save();
         }, this);
+
+        this._manageSearch();
+
         return r;
       }
     );
@@ -149,18 +152,31 @@ var FilteredTweetsModel = Model.create(
 
   isSearch: function()
   {
-    return this.title().slice(-1) === "?";
+    return this._isSearch;
   },
 
-  asSearch: function()
+  _manageSearch: function()
   {
-    if (!this.isSearch())
+    this._isSearch = this.title().slice(-1) === "?";
+    var nquery = this._isSearch ? this.title().slice(0, -1).toLowerCase() : null;
+    if (this._searchQuery != nquery)
     {
-      return null;
-    }
-    else
-    {
-      return this.title().slice(0, -1);
+      if (this._searchQuery)
+      {
+        this._account.removeSearch(this._searchQuery);
+        this.tweets().removeExcludeFilter(this._searchExcludeFilter);
+      }
+      this._searchQuery = nquery;
+      if (this._searchQuery)
+      {
+        var query = this._searchQuery;
+        this._searchExcludeFilter = function(tweet)
+        {
+          return !tweet.match(query);
+        };
+        this.tweets().addExcludeFilter(this._searchExcludeFilter);
+        this._account.addSearch(this._searchQuery);
+      }
     }
   },
 
@@ -279,6 +295,8 @@ var FilteredTweetsModel = Model.create(
   {
     this._removed = true;
     this._account.preferences.removeAccountList(this.uuid());
+    this.title("");
+    this._manageSearch();
   },
 
   _save: function()
@@ -294,6 +312,7 @@ var FilteredTweetsModel = Model.create(
         viz: this.viz(),
         tweets: this.tweets().serialize().map(function(tweet) { return tweet.id_str; })
       });
+      this._manageSearch();
     }
   },
 

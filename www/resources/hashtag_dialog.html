@@ -1,0 +1,20 @@
+<div class="dialog tweet-profile">
+  <div class="border" data-action-click="Ignore">
+      <div class="inner">
+      <div class="left">
+        <img class="icon" src="/img/hashtag.png">
+        <div class="body">
+          <span class="hashtag-name">{{name}}</span>
+        </div>
+      </div>
+      <div class="right">
+        {{#followed_by}}
+          <div class="button unfollow" data-action-click="Unfollow">Unfollow</div>
+        {{/followed_by}}
+        {{^followed_by}}
+          <div class="button follow" data-action-click="Follow">Follow</div>
+        {{/followed_by}}
+      </div>
+    </div>
+  </div>
+</div>

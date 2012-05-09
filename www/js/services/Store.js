@@ -53,3 +53,12 @@ new StorageGridProvider(
   },
   dbinfo
 );
+new StorageGridProvider(
+  grid.get(),
+  /^\/hashtags\/(.*)$/,
+  function(selector, path)
+  {
+    return "accounts_hashtags_" + selector.exec(path)[1];
+  },
+  dbinfo
+);

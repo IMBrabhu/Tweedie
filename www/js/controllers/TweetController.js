@@ -313,6 +313,47 @@ var TweetController = xo.Controller.create(
     );
   },
 
+  onHashtag: function(_, _, e, models)
+  {
+    this.metric("hashtag:open");
+    var hashtag = e.actionTarget.innerText;
+    var m = new (Model.create(
+    {
+      name: Model.Property,
+      followed_by: Model.Property
+    }))(
+    {
+      name: hashtag,
+      followed_by: models.account().isFollowingHashtag(hashtag)
+    });
+    new ModalView(
+    {
+      node: document.getElementById("root-dialog"),
+      template: __resources.hashtag_dialog,
+      partials: __resources,
+      model: m,
+      controller: new (xo.Controller.create(
+      {
+        metrics:
+        {
+          category: "hashtag_dialog"
+        },
+        onFollow: function()
+        {
+          this.metric("follow");
+          m.followed_by(true);
+          models.account().followHashtag(hashtag);
+        },
+        onUnfollow: function()
+        {
+          this.metric("unfollow");
+          m.followed_by(false);
+          models.account().unfollowHashtag(hashtag);
+        }
+      }))
+    });
+  },
+
   onOpenTweet: function(_, v, e)
   {
     var nested = v.node().querySelector(".nested-tweets");
