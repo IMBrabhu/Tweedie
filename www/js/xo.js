@@ -1670,6 +1670,7 @@ var FilteredModelSet = exports.FilteredModelSet = Class(IndexedModelSet,
   {
     this._include = [];
     this._exclude = [];
+    this._defaultInclude = values.defaultInclude || true;
     __super(values);
   },
 
@@ -1814,14 +1815,17 @@ var FilteredModelSet = exports.FilteredModelSet = Class(IndexedModelSet,
       }
     }
     filters = this._exclude;
-    for (var i = 0, len = filters.length; i < len; i++)
+    if (filters.length)
     {
-      if (filters[i].call(this, model))
+      for (var i = 0, len = filters.length; i < len; i++)
       {
-        return false;
+        if (filters[i].call(this, model))
+        {
+          return false;
+        }
       }
     }
-    return true;
+    return this._defaultInclude;
   }
 });
 var View = exports.View = Class(Model,
@@ -4255,6 +4259,15 @@ if (typeof XMLHttpRequest !== "undefined")
       return Co.Routine(this,
         function()
         {
+          if (!config.headers)
+          {
+            config.headers = {};
+          }
+          if (!config.headers["Content-Type"])
+          {
+            config.headers["Content-Type"] = "application/x-www-form-urlencoded";
+          }
+
           config.auth && config.auth.sign(config);
 
           var req = this._req = new XMLHttpRequest();
