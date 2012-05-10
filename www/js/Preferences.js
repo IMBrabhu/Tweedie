@@ -20,7 +20,7 @@ var Preferences = Class(Events,
             // List have changed.
             this.emit("listsChange");
           }
-          else if (key === this._base + "/hashtags")
+          else if (key === this._hbase + "/following")
           {
             this.emit("hashtagsChange");
           }

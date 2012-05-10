@@ -116,7 +116,7 @@ var __resources = {
   <div class="border" data-action-click="Ignore">\
       <div class="inner">\
       <div class="left">\
-        <img class="icon" src="/img/hashtag.png">\
+        <img class="icon" src="img/hashtag.png">\
         <div class="body">\
           <span class="hashtag-name">{{name}}</span>\
         </div>\

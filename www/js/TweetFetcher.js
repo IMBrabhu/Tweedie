@@ -147,7 +147,7 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
+              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&include_rts=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
               auth: this._auth
             });
           },

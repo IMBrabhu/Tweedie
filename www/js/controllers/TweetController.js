@@ -316,14 +316,14 @@ var TweetController = xo.Controller.create(
   onHashtag: function(_, _, e, models)
   {
     this.metric("hashtag:open");
-    var hashtag = e.actionTarget.innerText;
+    var hashtag = e.actionTarget.innerText.slice(1);
     var m = new (Model.create(
     {
       name: Model.Property,
       followed_by: Model.Property
     }))(
     {
-      name: hashtag,
+      name: "#" + hashtag,
       followed_by: models.account().isFollowingHashtag(hashtag)
     });
     new ModalView(

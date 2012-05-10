@@ -397,24 +397,24 @@ var Account = Class(Events,
 
   isFollowingHashtag: function(hashtag)
   {
-    return this._followingHashtags.indexOf(hashtag.slice(1).toLowerCase()) !== -1;
+    return this._followingHashtags.indexOf(hashtag.toLowerCase()) !== -1;
   },
 
   unfollowHashtag: function(hashtag)
   {
-    var idx = this._followingHashtags.indexOf(hashtag.slice(1).toLowerCase());
+    var idx = this._followingHashtags.indexOf(hashtag.toLowerCase());
     if (idx !== -1)
     {
       this._followingHashtags.splice(idx, 1);
-      this.removeSearch(hashtag);
+      this.removeSearch("#" + hashtag);
       this.preferences.setFollowedHashtags(this._followingHashtags);
     }
   },
 
   followHashtag: function(hashtag)
   {
-    this._followingHashtags.push(hashtag.slice(1).toLowerCase());
-    this.addSearch(hashtag);
+    this._followingHashtags.push(hashtag.toLowerCase());
+    this.addSearch("#" + hashtag);
     this.preferences.setFollowedHashtags(this._followingHashtags);
   },
 

@@ -10004,6 +10004,7 @@ var Tweet = Model.create(
       recipient: values.recipient && { name: values.recipient.name, screen_name: values.recipient.screen_name, id_str: values.recipient.id_str, lang: values.recipient.lang },
       from_user_name: values.from_user_name,
       from_user: values.from_user,
+      from_user_id_str: values.from_user_id_str,
       iso_language_code: values.iso_language_code,
       profile_image_url: values.profile_image_url,
       created_at: values.created_at,
@@ -10818,6 +10819,22 @@ var Tweet = Model.create(
     {
       return 0;
     }
+  },
+
+  hasHashtag: function(tweet, tags)
+  {
+    var hashtags = tweet.entities && tweet.entities.hashtags;
+    if (hashtags)
+    {
+      for (var i = hashtags.length - 1; i >= 0; i--)
+      {
+        if (tags.indexOf(hashtags[i].text.toLowerCase()) !== -1)
+        {
+          return true;
+        }
+      }
+    }
+    return false;
   },
 
   TweetTag: { title: "Tweet", type: "tweet", key: "tweet", hashkey: "tweet:tweet" },
@@ -11995,7 +12012,7 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
+              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&include_rts=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
               auth: this._auth
             });
           },
@@ -12534,13 +12551,13 @@ var TweetFetcher = xo.Class(Events,
 
   isFriend: function(user)
   {
-    if (!this._friends.length || user.screen_name === this._account.userInfo.screen_name)
+    if (!this._friends.length || (user.screen_name || user.from_user_name) === this._account.userInfo.screen_name)
     {
       return true;
     }
     else
     {
-      return this._friends.indexOf(parseInt(user.id_str)) !== -1;
+      return this._friends.indexOf(parseInt(user.id_str || user.from_user_id_str)) !== -1;
     }
   },
 
@@ -12796,7 +12813,8 @@ var Account = Class(Events,
     this.tweetLists = new TweetLists(this);
     this.errors = new Errors(this);
     this.userAndTags = new UsersAndTags(this);
-    this.preferences = new Preferences("/tweets/0");
+    this.preferences = new Preferences("0");
+    this._followingHashtags = [];
   },
 
   open: function()
@@ -12865,6 +12883,55 @@ var Account = Class(Events,
       },
       function()
       {
+        this.preferences.setFollowedHashtags([]); // HACK HACK HACK RESET
+        return this.preferences.getFollowedHashtags();
+      },
+      function(hashtags)
+      {
+        this._followingHashtags = hashtags();
+        this.preferences.on("hashtagsChange", function()
+        {
+          Co.Routine(this,
+            function()
+            {
+              return this.preferences.getFollowedHashtags();
+            },
+            function(hashtags)
+            {
+              hashtags = hashtags();
+              var ohashtags = this._followingHashtags;
+              var atags = [];
+              var rtags = [];
+              hashtags.forEach(function(tag)
+              {
+                if (ohashtags.indexOf(tag) === -1)
+                {
+                  atags.push(tag);
+                }
+              });
+              ohashtags.forEach(function(tag)
+              {
+                if (hashtags.indexOf(tag) === -1)
+                {
+                  rtags.push(tag);
+                }
+              });
+              atags.forEach(function(tag)
+              {
+                this.followHashtag(tag);
+              }, this);
+              rtags.forEach(function(tag)
+              {
+                this.unfollowHashtag(tag);
+              }, this);
+            }
+          );
+        }, this);
+        this._followingHashtags.forEach(function(tag)
+        {
+          this.followHashtag(tag);
+        }, this);
+
         this._fetcher.on("tweets", function(evt, tweets)
         {
           this.tweetLists.addTweets(tweets);
@@ -12876,6 +12943,7 @@ var Account = Class(Events,
         this._fetcher.on("searches", function(evt, tweets)
         {
           this.tweetLists.addSearch(tweets);
+          this._addFollowedHashtags(tweets);
         }, this);
         this._fetcher.on("favs", function(evt, tweets)
         {
@@ -13136,21 +13204,41 @@ var Account = Class(Events,
     return this._fetcher.removeSearch(query);
   },
 
-  _followingHashtags: {},
-
   isFollowingHashtag: function(hashtag)
   {
-    return hashtag in this._followingHashtags;
+    return this._followingHashtags.indexOf(hashtag.toLowerCase()) !== -1;
   },
 
   unfollowHashtag: function(hashtag)
   {
-    delete this._followingHashtags[hashtag];
+    var idx = this._followingHashtags.indexOf(hashtag.toLowerCase());
+    if (idx !== -1)
+    {
+      this._followingHashtags.splice(idx, 1);
+      this.removeSearch("#" + hashtag);
+      this.preferences.setFollowedHashtags(this._followingHashtags);
+    }
   },
 
   followHashtag: function(hashtag)
   {
-    this._followingHashtags[hashtag] = true;
+    this._followingHashtags.push(hashtag.toLowerCase());
+    this.addSearch("#" + hashtag);
+    this.preferences.setFollowedHashtags(this._followingHashtags);
+  },
+
+  _addFollowedHashtags: function(tweets)
+  {
+    var hashtags = this._followingHashtags;
+    var match = [];
+    tweets.forEach(function(tweet)
+    {
+      if (Tweet.hasHashtag(tweet, hashtags))
+      {
+        match.push(tweet);
+      }
+    });
+    match.length && this.tweetLists.addTweets(match);
   },
 
   serialize: function()
@@ -13835,7 +13923,8 @@ var Preferences = Class(Events,
 {
   constructor: function(base)
   {
-    this._base = base;
+    this._base = "/tweets/" + base;
+    this._hbase = "/hashtags/" + base;
     this._grid = grid.get();
     if (typeof SyncStorage !== "undefined")
     {
@@ -13851,6 +13940,10 @@ var Preferences = Class(Events,
           {
             // List have changed.
             this.emit("listsChange");
+          }
+          else if (key === this._hbase + "/following")
+          {
+            this.emit("hashtagsChange");
           }
           else if (key.indexOf(this._base + "/") === 0)
           {
@@ -13996,6 +14089,42 @@ var Preferences = Class(Events,
     var id = this._base + "/" + uuid;
     this._sync.remove(id);
     return this._grid.remove(id);
+  },
+
+  getFollowedHashtags: function()
+  {
+    var id = this._hbase + "/following";
+    var data;
+    return Co.Routine(this,
+      function(r)
+      {
+        return this._grid.read(id);
+      },
+      function(r)
+      {
+        data = r() || [];
+        this._sync.get(id, Co.Callback(this, function(tags)
+        {
+          return tags;
+        }));
+      },
+      function(tags)
+      {
+        tags = tags();
+        if (tags)
+        {
+          data = tags;
+        }
+        return data;
+      }
+    );
+  },
+
+  setFollowedHashtags: function(hashtags)
+  {
+    var id = this._hbase + "/following";
+    this._grid.write(id, hashtags);
+    this._sync.set(id, hashtags);
   }
 });
 var dbinfo =
@@ -14050,6 +14179,15 @@ new StorageGridProvider(
   function(selector, path)
   {
     return "accounts_alltweets_" + selector.exec(path)[1];
+  },
+  dbinfo
+);
+new StorageGridProvider(
+  grid.get(),
+  /^\/hashtags\/(.*)$/,
+  function(selector, path)
+  {
+    return "accounts_hashtags_" + selector.exec(path)[1];
   },
   dbinfo
 );
@@ -14684,14 +14822,14 @@ var TweetController = xo.Controller.create(
   onHashtag: function(_, _, e, models)
   {
     this.metric("hashtag:open");
-    var hashtag = e.actionTarget.innerText;
+    var hashtag = e.actionTarget.innerText.slice(1);
     var m = new (Model.create(
     {
       name: Model.Property,
       followed_by: Model.Property
     }))(
     {
-      name: hashtag,
+      name: "#" + hashtag,
       followed_by: models.account().isFollowingHashtag(hashtag)
     });
     new ModalView(
@@ -14823,8 +14961,6 @@ var ListController = xo.Controller.create(
     document.getElementById("filter").value = "";
     RootView.getViewByName("tweets").filterText("");
 
-    //PrimaryFetcher && PrimaryFetcher.clearSearch();
-
     models.current_list(m);
     m.markAllAsRead();
     this._editList(null, null);
@@ -14836,16 +14972,6 @@ var ListController = xo.Controller.create(
     this._selectedListView = v;
     this._selectedListView.property("selected", true);
 
-    /*var query = m.asSearch();
-    if (query)
-    {
-      this.metric("select:search");
-      //models.account().search(query);
-    }
-    else
-    {
-      this.metric("select:list");
-    }*/
     this.metric(m.isSearch() ? "select:search" : "select:list");
   },
 
@@ -15162,7 +15288,7 @@ var AccountController = xo.Controller.create(
   <div class="border" data-action-click="Ignore">\
       <div class="inner">\
       <div class="left">\
-        <img class="icon" src="/img/hashtag.png">\
+        <img class="icon" src="img/hashtag.png">\
         <div class="body">\
           <span class="hashtag-name">{{name}}</span>\
         </div>\
