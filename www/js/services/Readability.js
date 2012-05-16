@@ -1,5 +1,8 @@
 (function()
 {
+  var TITLE = "#article-entry-title,#rdb-article-title,.instapaper_title";
+  var BODY = "#rdb-article-content,.instapaper_body";
+
   var ReadabilityModel = Model.create(
   {
     title: Model.Property,
@@ -53,8 +56,8 @@
             stage.innerHTML = text;
             model.delayUpdate(function()
             {
-              this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
-              this.text(stage.querySelector("#rdb-article-content").innerHTML);
+              this.title(stage.querySelector(TITLE).innerHTML);
+              this.text(stage.querySelector(BODY).innerHTML);
             });
             return;
           }
@@ -100,8 +103,8 @@
               stage.innerHTML = text;
               model.delayUpdate(function()
               {
-                this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
-                this.text(stage.querySelector("#rdb-article-content").innerHTML);
+                this.title(stage.querySelector(TITLE).innerHTML);
+                this.text(stage.querySelector(BODY).innerHTML);
               });
             }
           );

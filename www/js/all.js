@@ -12883,7 +12883,6 @@ var Account = Class(Events,
       },
       function()
       {
-        this.preferences.setFollowedHashtags([]); // HACK HACK HACK RESET
         return this.preferences.getFollowedHashtags();
       },
       function(hashtags)
