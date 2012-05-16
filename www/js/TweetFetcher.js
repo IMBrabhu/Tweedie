@@ -280,8 +280,8 @@ var TweetFetcher = xo.Class(Events,
             {
               tweet.retweeted_of_me = true;
             });
+            s.tweets = s.tweets.concat(json);
           }
-          s.tweets = s.tweets.concat(json);
         }
         catch (e)
         {
