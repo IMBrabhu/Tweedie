@@ -497,7 +497,7 @@ var Tweet = Model.create(
       {
         this._tags = null;
         this._tagsHash = null;
-        this.emit("update.retweeted_by_me");
+        this.emit("update.retweeted_of_me");
         this.emit("update");
       }
       return ov;
