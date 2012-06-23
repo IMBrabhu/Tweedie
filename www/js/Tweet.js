@@ -3,6 +3,7 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
+  cards: Model.ROProperty,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -20,7 +21,7 @@ var Tweet = Model.create(
 
   _reduce: function(values)
   {
-    return {
+    var r = {
       id_str: values.id_str,
       entities: values.entities,
       text: values.text,
@@ -39,8 +40,50 @@ var Tweet = Model.create(
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
       in_reply_to_status_id_str: values.in_reply_to_status_id_str,
-      is_search: values.is_search
+      is_search: values.is_search,
+      cards: values.cards || null
+    };
+    if (!r.cards)
+    {
+      var v = r.retweeted_status || r;
+      var m = v.entities && v.entities.media;
+      if (m && m.length)
+      {
+        for (var i = m.length - 1; i >= 0; i--)
+        {
+          var media = m[i];
+          if (media.type === "photo" || media.type === "video")
+          {
+            r.cards =
+            {
+              photos:
+              [
+                {
+                  // url
+                  // title
+                  // description
+                  // author_user
+                  // site_user
+                  images:
+                  {
+                    mobile:
+                    {
+                      image_url_2x: media.media_url + (media.sizes ? ":small" : "")
+                    },
+                    web:
+                    {
+                      image_url_2x: media.media_url
+                    }
+                  }
+                }
+              ]
+            };
+            break;
+          }
+        }
+      }
     }
+    return r;
   },
 
   entifiedText: function()
@@ -281,81 +324,6 @@ var Tweet = Model.create(
     }
   },
 
-  embed_photo_url_small: function()
-  {
-    if (this._embed_photo_url_small === undefined)
-    {
-      this._embed_photo_url_small = null;
-      if (this.is_retweet())
-      {
-        this._embed_photo_url_small = this.retweet().embed_photo_url_small();
-      }
-      else
-      {
-        var media = this._getFirstMediaType("photo");
-        if (media)
-        {
-          this._embed_photo_url_small = media.media_url + (media.sizes ? ":small" : "");
-        }
-        else
-        {
-          media = this._getFirstMediaType("video");
-          if (media)
-          {
-            this._embed_photo_url_small = media.media_url;
-          }
-        }
-      }
-    }
-    return this._embed_photo_url_small;
-  },
-
-  embed_photo_url: function()
-  {
-    if (this._embed_photo_url === undefined)
-    {
-      this._embed_photo_url = null;
-      if (this.is_retweet())
-      {
-        this._embed_photo_url = this.retweet().embed_photo_url();
-      }
-      else
-      {
-        var media = this._getFirstMediaType("photo");
-        if (media)
-        {
-          this._embed_photo_url = media.media_url;
-        }
-        else
-        {
-          media = this._getFirstMediaType("video");
-          if (media)
-          {
-            this._embed_photo_url = media.media_url;
-          }
-        }
-      }
-    }
-    return this._embed_photo_url;
-  },
-
-  _getFirstMediaType: function(type)
-  {
-    var m = this._values.entities && this._values.entities.media;
-    if (m && m.length)
-    {
-      for (var i = m.length - 1; i >= 0; i--)
-      {
-        var media = m[i];
-        if (media.type === type)
-        {
-          return media;
-        }
-      }
-    }
-    return null;
-  },
-
   urls: function()
   {
     var urls = [];
@@ -376,51 +344,35 @@ var Tweet = Model.create(
 
   oembeds: function(oembeds)
   {
-    var entities = this._values.entities;
-    if (entities)
+    if (!this._values.cards)
     {
-      entities.urls && entities.urls.forEach(function(url, idx, array)
+      var entities = this._values.entities;
+      if (entities)
       {
-        var o = url.expanded_url && oembeds[url.expanded_url];
-        if (o)
+        var urls = entities.urls;
+        for (var i = urls.length - 1; i >= 0; i--)
         {
-          switch (o.type)
+          var url = urls[i];
+          var cards = url.expanded_url && oembeds[url.expanded_url];
+          if (cards)
           {
-            case "photo":
-            case "video":
-              array.splice(idx, 1);
-              var media = entities.media || (entities.media = []);
-              media.push(
-              {
-                type: o.type,
-                media_url: o.media_url || o.url,
-                display_url: o.url,
-                resolved_url: o.url,
-                resolved_display_url: o.url && this.make_display_url(o.url),
-                html: o.html,
-                htmlLarge: o.html,
-                indices: url.indices
-              });
-              break;
-
-            default:
-              url.resolved_url = o.url;
-              url.resolved_display_url = this.make_display_url(o.url);
-              break;
+            if (cards.url)
+            {
+              url.resolved_url = cards.url;
+              url.resolved_display_url = this._make_display_url(cards.url);
+              this._tags = null;
+              this._tagsHash = null;
+            }
+            if (cards.photos || cards.videos)
+            {
+              this._values.cards = cards;
+              this._tags = null;
+              this._tagsHash = null;
+            }
+            break;
           }
         }
-      }, this);
-      entities.media && entities.media.forEach(function(media)
-      {
-        var o = oembeds[media.media_url + (media.sizes ? ":small" : "")];
-        if (o)
-        {
-          media.resolved_url = o.url;
-          media.resolved_display_url = this.make_display_url(o.url);
-        }
-      }, this);
-      this._tags = null;
-      this._tagsHash = null;
+      }
     }
   },
 
@@ -561,6 +513,7 @@ var Tweet = Model.create(
 
   _buildTags: function()
   {
+    var me = this._account.tweetLists.screenname;
     var used = {};
     var tags = [];
     if (this.is_retweet())
@@ -590,6 +543,11 @@ var Tweet = Model.create(
       used["screenname:" + key] = true;
       tags.push({ title: name, type: "screenname", key: key });
       this._account.userAndTags.addUser(this.screen_name(), this.name());
+      if (key === me)
+      {
+        used[Tweet.MentionTag.hashkey] = true;
+        tags.push(Tweet.MentionTag);
+      }
 
       Topics.lookupByScreenName(key).forEach(function(topic)
       {
@@ -611,7 +569,6 @@ var Tweet = Model.create(
       var entities = this._values.entities;
       if (entities)
       {
-        var me = this._account.tweetLists.screenname;
         entities.user_mentions && entities.user_mentions.forEach(function(mention)
         {
           var name = "@" + mention.screen_name;
@@ -674,6 +631,20 @@ var Tweet = Model.create(
             }
           }
         });
+      }
+      if (this._values.cards)
+      {
+        var cards = this._values.cards;
+        if (cards.photos && !used[Tweet.PhotoTag.hashkey])
+        {
+          used[Tweet.PhotoTag.hashkey] = true;
+          tags.push(Tweet.PhotoTag);
+        }
+        if (cards.videos && !used[Tweet.VideoTag.hashkey])
+        {
+          used[Tweet.VideoTag.hashkey] = true;
+          tags.push(Tweet.VideoTag);
+        }
       }
 
       if (this._values.place)
@@ -765,7 +736,7 @@ var Tweet = Model.create(
     return this._replytweet;
   },
 
-  make_display_url: function(url)
+  _make_display_url: function(url)
   {
     url = new Url(url);
     var fullname = url.pathname + url.search + url.hash;

@@ -14,7 +14,7 @@ var TweetController = xo.Controller.create(
   onUrl: function(m, v, e)
   {
     this.metric("url:open");
-    var url = e.target.dataset.href;
+    var url = e.actionTarget.dataset.href;
 
     Co.Routine(this,
       function()

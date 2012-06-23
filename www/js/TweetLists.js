@@ -237,10 +237,6 @@ var TweetLists = Class(
       },
       function(oembeds)
       {
-        var tweetb = [];
-        var mentionb = [];
-        var dmb = [];
-
         oembeds = oembeds();
         include.forEach(function(tweet)
         {
@@ -454,7 +450,7 @@ var TweetLists = Class(
       function(r)
       {
         all = r();
-        all.lists.forEach(function(listinfo)
+        all.lists && all.lists.forEach(function(listinfo)
         {
           this.lists.append(new FilteredTweetsModel({ account: this._account, title: listinfo.title, uuid: listinfo.uuid, canRemove: true }));
         }, this);

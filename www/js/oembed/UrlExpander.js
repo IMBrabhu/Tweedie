@@ -26,7 +26,7 @@ var UrlExpander = Class(Events,
               {
                 return "urls%5B%5D=" + escape(url)
               }).join("&"),
-              headers: KEYS.twitterResolve
+              headers: KEYS.twitterHeaders
             });
           },
           function(r)
@@ -61,9 +61,23 @@ var UrlExpander = Class(Events,
     if (url.indexOf("http://instagr.am/p/") === 0)
     {
       return {
-        url: url + "/media?size=m",
-        media_url: url + "/media?size=l",
-        type: "photo"
+        url: url,
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: url + "/media?size=m"
+              },
+              web:
+              {
+                image_url_2x: url + "/media?size=l"
+              }
+            }
+          }
+        ]
       };
     }
     // YouTube - No YouTube for now because iframes mess up the touch scolling in iOS 5.1 :-(
@@ -83,26 +97,68 @@ var UrlExpander = Class(Events,
       var v = new xo.Url(url).getParameter("v");
       return {
         url: url,
-        media_url: "http://img.youtube.com/vi/" + v + "/0.jpg",
-        type: "video"
-      }
+        videos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: "http://img.youtube.com/vi/" + v + "/0.jpg"
+              },
+              web:
+              {
+                image_url_2x: "http://img.youtube.com/vi/" + v + "/0.jpg"
+              }
+            }
+          }
+        ]
+      };
     }
     // Twitpic
     else if (url.indexOf("http://twitpic.com/") === 0)
     {
       return {
         url: url,
-        media_url: "http://twitpic.com/show/large/" + new xo.Url(url).pathname,
-        type: "photo"
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: "http://twitpic.com/show/thumb" + new xo.Url(url).pathname
+              },
+              web:
+              {
+                image_url_2x: "http://twitpic.com/show/large" + new xo.Url(url).pathname
+              }
+            }
+          }
+        ]
       };
     }
     // YFrog
     else if (url.indexOf("http://yfrog.com/") === 0)
     {
       return {
-        url: url + ":iphone",
-        media_url: url + ":medium",
-        type: "photo"
+        url: url,
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: url + ":iphone"
+              },
+              web:
+              {
+                image_url_2x: url + ":medium"
+              }
+            }
+          }
+        ]
       };
     }
     else

@@ -5,11 +5,7 @@
     <div class="body">
       <span class="fullname">{{name}}</span> <span class="screenname">@{{screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>
       <div class="text">{{{entifiedText}}}</div>
-      {{#include_media}}
-        {{#embed_photo_url}}
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">
-        {{/embed_photo_url}}
-      {{/include_media}}
+      {{>basic_media}}
     </div>
   {{/retweet}}
   {{^retweet}}
@@ -17,11 +13,7 @@
     <div class="body">
       <span class="fullname">{{conversation_name}}</span> <span class="screenname">@{{conversation_screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>
       <div class="text">{{{entifiedText}}}</div>
-      {{#include_media}}
-        {{#embed_photo_url}}
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">
-        {{/embed_photo_url}}
-      {{/include_media}}
+      {{>basic_media}}
     </div>
   {{/retweet}}
   {{#is_retweet}}

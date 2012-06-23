@@ -147,8 +147,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&include_rts=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=1&include_rts=1&include_cards=1&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           },
           function(r)
@@ -198,8 +199,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/favorites.json?include_entities=true&count=200&since_id=" + s.favId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/favorites.json?include_entities=1&include_cards=1&count=200&since_id=" + s.favId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -231,8 +233,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=true&count=200&since_id=" + s.mentionId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=1&include_cards=1&count=200&since_id=" + s.mentionId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -264,8 +267,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=true&count=100&since_id=" + s.retweetId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=1&include_cards=1&count=100&since_id=" + s.retweetId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -304,8 +308,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages.json?include_entities=true&count=100&since_id=" + s.dmRecvId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/direct_messages.json?include_entities=1&count=100&since_id=" + s.dmRecvId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           },
           function()
@@ -313,8 +318,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=true&count=100&since_id=" + s.dmSendId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=1&count=100&since_id=" + s.dmSendId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           }
         );
@@ -544,9 +550,10 @@ var TweetFetcher = xo.Class(Events,
     var config =
     {
       method: "GET",
-      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + 
+      url: "https://search.twitter.com/search.json?include_entities=1&include_cards=1&rpp=100&q=" + 
         encodeURIComponent(this._searchStatus.queries.join(" OR ")),
-      auth: this._auth
+      auth: this._auth,
+      headers: KEYS.twitterHeaders
     };
     return Co.Routine(this,
       function()

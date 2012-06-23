@@ -79,7 +79,7 @@ var Account = Class(Events,
       },
       function(hashtags)
       {
-        this._followingHashtags = hashtags();
+        hashtags = hashtags();
         this.preferences.on("hashtagsChange", function()
         {
           Co.Routine(this,
@@ -118,7 +118,7 @@ var Account = Class(Events,
             }
           );
         }, this);
-        this._followingHashtags.forEach(function(tag)
+        hashtags.forEach(function(tag)
         {
           this.followHashtag(tag);
         }, this);
@@ -156,7 +156,7 @@ var Account = Class(Events,
           self._fetcher.abortFetch();
           self._fetcher.stopSearch();
           self.fetch();
-          self._fetcher.startSearch();
+          self._fetcher.restartSearch();
         }
         function offline()
         {
@@ -402,7 +402,8 @@ var Account = Class(Events,
 
   unfollowHashtag: function(hashtag)
   {
-    var idx = this._followingHashtags.indexOf(hashtag.toLowerCase());
+    hashtag = hashtag.toLowerCase();
+    var idx = this._followingHashtags.indexOf(hashtag);
     if (idx !== -1)
     {
       this._followingHashtags.splice(idx, 1);
@@ -413,9 +414,13 @@ var Account = Class(Events,
 
   followHashtag: function(hashtag)
   {
-    this._followingHashtags.push(hashtag.toLowerCase());
-    this.addSearch("#" + hashtag);
-    this.preferences.setFollowedHashtags(this._followingHashtags);
+    hashtag = hashtag.toLowerCase();
+    if (this._followingHashtags.indexOf(hashtag) === -1)
+    {
+      this._followingHashtags.push(hashtag);
+      this.addSearch("#" + hashtag);
+      this.preferences.setFollowedHashtags(this._followingHashtags);
+    }
   },
 
   _addFollowedHashtags: function(tweets)

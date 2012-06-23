@@ -1,0 +1,35 @@
+{{#include_media}}
+  {{#cards}}
+    {{#first_photo}}
+      {{#images}}
+        <img class="photo" data-action-click="Image" data-href="{{web_url}}" src="{{mobile_url}}">
+      {{/images}}
+    {{/first_photo}}
+    {{^first_photo}}
+      {{#first_summary}}
+        <div class="post-summary" data-action-click="Url" data-href="{{url}}">
+          <div class="post-article">Summary</div>
+          {{#images}}
+            {{#mobile}}
+              <img class="post-photo" src="{{image_url_2x}}">
+            {{/mobile}}
+          {{/images}}
+          <div class="post-body{{#images}}{{^mobile}}no-media{{/mobile}}{{/images}}">
+            <div class="title">{{title}}</div>
+            <div class="description">{{description}}</div>
+            {{#site_user}}
+              <div class="post-site">
+                <span class="name">{{name}}</span> <span class="screenname">@{{screen_name}}</span>
+              </div>
+            {{/site_user}}
+          </div>
+          <div class="post-end"></div>
+        </div>
+      {{/first_summary}}
+    {{/first_photo}}
+  {{/cards}}
+{{/include_media}}
+{{:first_photo}}var p = this.v('photos') || this.v('videos');return p && p[0]{{/first_photo}}
+{{:first_summary}}var s = this.v('summaries');return s && s[0]{{/first_summary}}
+{{:mobile_url}}return this.v('mobile').image_url_2x{{/mobile_url}}
+{{:web_url}}return this.v('web').image_url_2x{{/web_url}}

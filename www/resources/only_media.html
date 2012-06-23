@@ -1,0 +1,19 @@
+{{#_ View}}
+  {{#cards}}
+    {{#first_photo}}
+      {{#images}}
+        <div class="media-box">
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url('{{mobile_url}}')"></div>
+        </div>
+      {{/images}}
+      {{#videos}}
+        <div class="media-box">
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url('{{mobile_url}}')"></div>
+        </div>
+      {{/videos}}
+    {{/first_photo}}
+  {{/cards}}
+{{/_}}
+{{:first_photo}}var p = this.v('photos');return p && p[0]{{/first_photo}}
+{{:mobile_url}}return this.v('mobile').image_url_2x{{/mobile_url}}
+{{:web_url}}return this.v('web').image_url_2x{{/web_url}}

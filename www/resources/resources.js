@@ -1,4 +1,39 @@
 var __resources = {
+'basic_media': '{{#include_media}}\
+  {{#cards}}\
+    {{#first_photo}}\
+      {{#images}}\
+        <img class="photo" data-action-click="Image" data-href="{{web_url}}" src="{{mobile_url}}">\
+      {{/images}}\
+    {{/first_photo}}\
+    {{^first_photo}}\
+      {{#first_summary}}\
+        <div class="post-summary" data-action-click="Url" data-href="{{url}}">\
+          <div class="post-article">Summary</div>\
+          {{#images}}\
+            {{#mobile}}\
+              <img class="post-photo" src="{{image_url_2x}}">\
+            {{/mobile}}\
+          {{/images}}\
+          <div class="post-body{{#images}}{{^mobile}}no-media{{/mobile}}{{/images}}">\
+            <div class="title">{{title}}</div>\
+            <div class="description">{{description}}</div>\
+            {{#site_user}}\
+              <div class="post-site">\
+                <span class="name">{{name}}</span> <span class="screenname">@{{screen_name}}</span>\
+              </div>\
+            {{/site_user}}\
+          </div>\
+          <div class="post-end"></div>\
+        </div>\
+      {{/first_summary}}\
+    {{/first_photo}}\
+  {{/cards}}\
+{{/include_media}}\
+{{:first_photo}}var p = this.v(\'photos\') || this.v(\'videos\');return p && p[0]{{/first_photo}}\
+{{:first_summary}}var s = this.v(\'summaries\');return s && s[0]{{/first_summary}}\
+{{:mobile_url}}return this.v(\'mobile\').image_url_2x{{/mobile_url}}\
+{{:web_url}}return this.v(\'web\').image_url_2x{{/web_url}}',
 'basic_tweet': '{{#_ View}}\
 <div class="tweet"{{#has_children}} data-action-click="OpenTweet"{{/has_children}}>\
   {{#retweet}}\
@@ -6,11 +41,7 @@ var __resources = {
     <div class="body">\
       <span class="fullname">{{name}}</span> <span class="screenname">@{{screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>\
       <div class="text">{{{entifiedText}}}</div>\
-      {{#include_media}}\
-        {{#embed_photo_url}}\
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">\
-        {{/embed_photo_url}}\
-      {{/include_media}}\
+      {{>basic_media}}\
     </div>\
   {{/retweet}}\
   {{^retweet}}\
@@ -18,11 +49,7 @@ var __resources = {
     <div class="body">\
       <span class="fullname">{{conversation_name}}</span> <span class="screenname">@{{conversation_screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>\
       <div class="text">{{{entifiedText}}}</div>\
-      {{#include_media}}\
-        {{#embed_photo_url}}\
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">\
-        {{/embed_photo_url}}\
-      {{/include_media}}\
+      {{>basic_media}}\
     </div>\
   {{/retweet}}\
   {{#is_retweet}}\
@@ -257,7 +284,7 @@ var __resources = {
           {{/viz_stack}}\
           {{#viz_media}}\
             {{#tweets ViewSet.TextFilter.LiveList name:"tweets" filterKeys:["text","at_screen_name","name","tagkeys"] }}\
-              {{>media}}\
+              {{>only_media}}\
             {{/tweets}}\
           {{/viz_media}}\
         {{/current_list}}\
@@ -265,13 +292,25 @@ var __resources = {
     </div>\
   </div>\
 </div>',
-'media': '{{#embed_photo_url}}\
-  {{#_ View}}\
-    <div class="media-box">\
-      <div class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" style="background-image: url(\'{{embed_photo_url_small}}\')"></div>\
-    </div>\
-  {{/_}}\
-{{/embed_photo_url}}',
+'only_media': '{{#_ View}}\
+  {{#cards}}\
+    {{#first_photo}}\
+      {{#images}}\
+        <div class="media-box">\
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url(\'{{mobile_url}}\')"></div>\
+        </div>\
+      {{/images}}\
+      {{#videos}}\
+        <div class="media-box">\
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url(\'{{mobile_url}}\')"></div>\
+        </div>\
+      {{/videos}}\
+    {{/first_photo}}\
+  {{/cards}}\
+{{/_}}\
+{{:first_photo}}var p = this.v(\'photos\');return p && p[0]{{/first_photo}}\
+{{:mobile_url}}return this.v(\'mobile\').image_url_2x{{/mobile_url}}\
+{{:web_url}}return this.v(\'web\').image_url_2x{{/web_url}}',
 'readability': '<div class="dialog readability{{#show}} show{{/show}}" data-action-orientationchange="OrientationChange">\
   <div class="inner" id="readability-scroller" data-action-swipe-left="Forward" data-action-swipe-right="Backward" data-action-close="Close" data-action-click="IgnoreOrSwipe">\
     {{#title}}\

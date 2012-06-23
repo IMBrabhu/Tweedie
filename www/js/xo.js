@@ -4467,11 +4467,11 @@ var OAuth = exports.OAuth = Class(
     // Setup basic header
     var nheaders =
     {
-      oauth_timestamp: config.oauth_timestamp || Math.floor(Date.now() / 1000),
-      oauth_nonce: config.oauth_nonce || "01234".replace(/./g, function() { return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 62)) }),
-      oauth_consumer_key: config.oauth_consumer_key,
-      oauth_signature_method: config.oauth_signature_method || "HMAC-SHA1",
-      oauth_version: "1.0"
+      oauth_timestamp: self._encode(config.oauth_timestamp || Math.floor(Date.now() / 1000)),
+      oauth_nonce: self._encode(config.oauth_nonce || "01234".replace(/./g, function() { return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 62)) })),
+      oauth_consumer_key: self._encode(config.oauth_consumer_key),
+      oauth_signature_method: self._encode(config.oauth_signature_method || "HMAC-SHA1"),
+      oauth_version: self._encode("1.0")
     };
     
     // Include options token and callback
@@ -4487,7 +4487,7 @@ var OAuth = exports.OAuth = Class(
         kv = kv.split("=");
         if (kv.length == 2)
         {
-          nheaders[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
+          nheaders[decodeURIComponent(kv[0])] = self._encode(decodeURIComponent(kv[1]));
         }
       });
     }
@@ -4507,12 +4507,15 @@ var OAuth = exports.OAuth = Class(
 
     // Create signature from orders keys
     var sig = "";
-    Object.keys(nheaders).sort().forEach(function(key)
+    Object.keys(nheaders).map(function(key)
     {
-      sig += "&" + self._encode(key) + "=" + self._encode(nheaders[key])
-    });
+      return self._encode(key);
+    }).sort().forEach(function(key)
+    {
+      sig += "&" + key + "=" + nheaders[decodeURIComponent(key)];
+    })
     sig = params.method + "&" + self._encode(surl[1]) + "&" + self._encode(sig.substring(1));
-    
+
     // Sign
     switch (nheaders.oauth_signature_method)
     {

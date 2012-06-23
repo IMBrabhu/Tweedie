@@ -8769,11 +8769,11 @@ var OAuth = exports.OAuth = Class(
     // Setup basic header
     var nheaders =
     {
-      oauth_timestamp: config.oauth_timestamp || Math.floor(Date.now() / 1000),
-      oauth_nonce: config.oauth_nonce || "01234".replace(/./g, function() { return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 62)) }),
-      oauth_consumer_key: config.oauth_consumer_key,
-      oauth_signature_method: config.oauth_signature_method || "HMAC-SHA1",
-      oauth_version: "1.0"
+      oauth_timestamp: self._encode(config.oauth_timestamp || Math.floor(Date.now() / 1000)),
+      oauth_nonce: self._encode(config.oauth_nonce || "01234".replace(/./g, function() { return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 62)) })),
+      oauth_consumer_key: self._encode(config.oauth_consumer_key),
+      oauth_signature_method: self._encode(config.oauth_signature_method || "HMAC-SHA1"),
+      oauth_version: self._encode("1.0")
     };
     
     // Include options token and callback
@@ -8789,7 +8789,7 @@ var OAuth = exports.OAuth = Class(
         kv = kv.split("=");
         if (kv.length == 2)
         {
-          nheaders[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
+          nheaders[decodeURIComponent(kv[0])] = self._encode(decodeURIComponent(kv[1]));
         }
       });
     }
@@ -8809,12 +8809,15 @@ var OAuth = exports.OAuth = Class(
 
     // Create signature from orders keys
     var sig = "";
-    Object.keys(nheaders).sort().forEach(function(key)
+    Object.keys(nheaders).map(function(key)
     {
-      sig += "&" + self._encode(key) + "=" + self._encode(nheaders[key])
-    });
+      return self._encode(key);
+    }).sort().forEach(function(key)
+    {
+      sig += "&" + key + "=" + nheaders[decodeURIComponent(key)];
+    })
     sig = params.method + "&" + self._encode(surl[1]) + "&" + self._encode(sig.substring(1));
-    
+
     // Sign
     switch (nheaders.oauth_signature_method)
     {
@@ -9833,7 +9836,7 @@ var KEYS =
     oauth_consumer_secret: "DtWtTnewJLINEmnshVG47lyivxlyeDD68h2w6LqotY",
     callback: location.protocol === "file:" ? "http://aanon4.github.com/callback/" : location.origin + "/callback",
   },
-  twitterResolve:
+  twitterHeaders:
   {
     "X-PHX": true
   },
@@ -9978,6 +9981,7 @@ var Tweet = Model.create(
   id: Model.ROProperty("id_str"),
   text: Model.ROProperty,
   created_at: Model.ROProperty,
+  cards: Model.ROProperty,
 
   constructor: function(__super, values, account, reduce)
   {
@@ -9995,7 +9999,7 @@ var Tweet = Model.create(
 
   _reduce: function(values)
   {
-    return {
+    var r = {
       id_str: values.id_str,
       entities: values.entities,
       text: values.text,
@@ -10014,8 +10018,50 @@ var Tweet = Model.create(
       geo: values.geo && { coordinates: values.geo.coordinates },
       retweeted_status: values.retweeted_status && this._reduce(values.retweeted_status),
       in_reply_to_status_id_str: values.in_reply_to_status_id_str,
-      is_search: values.is_search
+      is_search: values.is_search,
+      cards: values.cards || null
+    };
+    if (!r.cards)
+    {
+      var v = r.retweeted_status || r;
+      var m = v.entities && v.entities.media;
+      if (m && m.length)
+      {
+        for (var i = m.length - 1; i >= 0; i--)
+        {
+          var media = m[i];
+          if (media.type === "photo" || media.type === "video")
+          {
+            r.cards =
+            {
+              photos:
+              [
+                {
+                  // url
+                  // title
+                  // description
+                  // author_user
+                  // site_user
+                  images:
+                  {
+                    mobile:
+                    {
+                      image_url_2x: media.media_url + (media.sizes ? ":small" : "")
+                    },
+                    web:
+                    {
+                      image_url_2x: media.media_url
+                    }
+                  }
+                }
+              ]
+            };
+            break;
+          }
+        }
+      }
     }
+    return r;
   },
 
   entifiedText: function()
@@ -10256,81 +10302,6 @@ var Tweet = Model.create(
     }
   },
 
-  embed_photo_url_small: function()
-  {
-    if (this._embed_photo_url_small === undefined)
-    {
-      this._embed_photo_url_small = null;
-      if (this.is_retweet())
-      {
-        this._embed_photo_url_small = this.retweet().embed_photo_url_small();
-      }
-      else
-      {
-        var media = this._getFirstMediaType("photo");
-        if (media)
-        {
-          this._embed_photo_url_small = media.media_url + (media.sizes ? ":small" : "");
-        }
-        else
-        {
-          media = this._getFirstMediaType("video");
-          if (media)
-          {
-            this._embed_photo_url_small = media.media_url;
-          }
-        }
-      }
-    }
-    return this._embed_photo_url_small;
-  },
-
-  embed_photo_url: function()
-  {
-    if (this._embed_photo_url === undefined)
-    {
-      this._embed_photo_url = null;
-      if (this.is_retweet())
-      {
-        this._embed_photo_url = this.retweet().embed_photo_url();
-      }
-      else
-      {
-        var media = this._getFirstMediaType("photo");
-        if (media)
-        {
-          this._embed_photo_url = media.media_url;
-        }
-        else
-        {
-          media = this._getFirstMediaType("video");
-          if (media)
-          {
-            this._embed_photo_url = media.media_url;
-          }
-        }
-      }
-    }
-    return this._embed_photo_url;
-  },
-
-  _getFirstMediaType: function(type)
-  {
-    var m = this._values.entities && this._values.entities.media;
-    if (m && m.length)
-    {
-      for (var i = m.length - 1; i >= 0; i--)
-      {
-        var media = m[i];
-        if (media.type === type)
-        {
-          return media;
-        }
-      }
-    }
-    return null;
-  },
-
   urls: function()
   {
     var urls = [];
@@ -10351,51 +10322,35 @@ var Tweet = Model.create(
 
   oembeds: function(oembeds)
   {
-    var entities = this._values.entities;
-    if (entities)
+    if (!this._values.cards)
     {
-      entities.urls && entities.urls.forEach(function(url, idx, array)
+      var entities = this._values.entities;
+      if (entities)
       {
-        var o = url.expanded_url && oembeds[url.expanded_url];
-        if (o)
+        var urls = entities.urls;
+        for (var i = urls.length - 1; i >= 0; i--)
         {
-          switch (o.type)
+          var url = urls[i];
+          var cards = url.expanded_url && oembeds[url.expanded_url];
+          if (cards)
           {
-            case "photo":
-            case "video":
-              array.splice(idx, 1);
-              var media = entities.media || (entities.media = []);
-              media.push(
-              {
-                type: o.type,
-                media_url: o.media_url || o.url,
-                display_url: o.url,
-                resolved_url: o.url,
-                resolved_display_url: o.url && this.make_display_url(o.url),
-                html: o.html,
-                htmlLarge: o.html,
-                indices: url.indices
-              });
-              break;
-
-            default:
-              url.resolved_url = o.url;
-              url.resolved_display_url = this.make_display_url(o.url);
-              break;
+            if (cards.url)
+            {
+              url.resolved_url = cards.url;
+              url.resolved_display_url = this._make_display_url(cards.url);
+              this._tags = null;
+              this._tagsHash = null;
+            }
+            if (cards.photos || cards.videos)
+            {
+              this._values.cards = cards;
+              this._tags = null;
+              this._tagsHash = null;
+            }
+            break;
           }
         }
-      }, this);
-      entities.media && entities.media.forEach(function(media)
-      {
-        var o = oembeds[media.media_url + (media.sizes ? ":small" : "")];
-        if (o)
-        {
-          media.resolved_url = o.url;
-          media.resolved_display_url = this.make_display_url(o.url);
-        }
-      }, this);
-      this._tags = null;
-      this._tagsHash = null;
+      }
     }
   },
 
@@ -10472,7 +10427,7 @@ var Tweet = Model.create(
       {
         this._tags = null;
         this._tagsHash = null;
-        this.emit("update.retweeted_by_me");
+        this.emit("update.retweeted_of_me");
         this.emit("update");
       }
       return ov;
@@ -10536,6 +10491,7 @@ var Tweet = Model.create(
 
   _buildTags: function()
   {
+    var me = this._account.tweetLists.screenname;
     var used = {};
     var tags = [];
     if (this.is_retweet())
@@ -10565,6 +10521,11 @@ var Tweet = Model.create(
       used["screenname:" + key] = true;
       tags.push({ title: name, type: "screenname", key: key });
       this._account.userAndTags.addUser(this.screen_name(), this.name());
+      if (key === me)
+      {
+        used[Tweet.MentionTag.hashkey] = true;
+        tags.push(Tweet.MentionTag);
+      }
 
       Topics.lookupByScreenName(key).forEach(function(topic)
       {
@@ -10586,7 +10547,6 @@ var Tweet = Model.create(
       var entities = this._values.entities;
       if (entities)
       {
-        var me = this._account.tweetLists.screenname;
         entities.user_mentions && entities.user_mentions.forEach(function(mention)
         {
           var name = "@" + mention.screen_name;
@@ -10649,6 +10609,20 @@ var Tweet = Model.create(
             }
           }
         });
+      }
+      if (this._values.cards)
+      {
+        var cards = this._values.cards;
+        if (cards.photos && !used[Tweet.PhotoTag.hashkey])
+        {
+          used[Tweet.PhotoTag.hashkey] = true;
+          tags.push(Tweet.PhotoTag);
+        }
+        if (cards.videos && !used[Tweet.VideoTag.hashkey])
+        {
+          used[Tweet.VideoTag.hashkey] = true;
+          tags.push(Tweet.VideoTag);
+        }
       }
 
       if (this._values.place)
@@ -10740,7 +10714,7 @@ var Tweet = Model.create(
     return this._replytweet;
   },
 
-  make_display_url: function(url)
+  _make_display_url: function(url)
   {
     url = new Url(url);
     var fullname = url.pathname + url.search + url.hash;
@@ -11510,10 +11484,6 @@ var TweetLists = Class(
       },
       function(oembeds)
       {
-        var tweetb = [];
-        var mentionb = [];
-        var dmb = [];
-
         oembeds = oembeds();
         include.forEach(function(tweet)
         {
@@ -11727,7 +11697,7 @@ var TweetLists = Class(
       function(r)
       {
         all = r();
-        all.lists.forEach(function(listinfo)
+        all.lists && all.lists.forEach(function(listinfo)
         {
           this.lists.append(new FilteredTweetsModel({ account: this._account, title: listinfo.title, uuid: listinfo.uuid, canRemove: true }));
         }, this);
@@ -12012,8 +11982,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=true&include_rts=true&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/statuses/home_timeline.json?include_entities=1&include_rts=1&include_cards=1&count=200&page=" + (page() + 1) + "&since_id=" + s.tweetId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           },
           function(r)
@@ -12063,8 +12034,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/favorites.json?include_entities=true&count=200&since_id=" + s.favId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/favorites.json?include_entities=1&include_cards=1&count=200&since_id=" + s.favId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -12096,8 +12068,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=true&count=200&since_id=" + s.mentionId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/statuses/mentions.json?include_entities=1&include_cards=1&count=200&since_id=" + s.mentionId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -12129,8 +12102,9 @@ var TweetFetcher = xo.Class(Events,
         return this._ajaxWithRetry(
         {
           method: "GET",
-          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=true&count=100&since_id=" + s.retweetId,
-          auth: this._auth
+          url: "https://api.twitter.com/1/statuses/retweets_of_me.json?include_entities=1&include_cards=1&count=100&since_id=" + s.retweetId,
+          auth: this._auth,
+          headers: KEYS.twitterHeaders
         });
       },
       function(r)
@@ -12145,8 +12119,8 @@ var TweetFetcher = xo.Class(Events,
             {
               tweet.retweeted_of_me = true;
             });
+            s.tweets = s.tweets.concat(json);
           }
-          s.tweets = s.tweets.concat(json);
         }
         catch (e)
         {
@@ -12169,8 +12143,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages.json?include_entities=true&count=100&since_id=" + s.dmRecvId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/direct_messages.json?include_entities=1&count=100&since_id=" + s.dmRecvId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           },
           function()
@@ -12178,8 +12153,9 @@ var TweetFetcher = xo.Class(Events,
             return this._ajaxWithRetry(
             {
               method: "GET",
-              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=true&count=100&since_id=" + s.dmSendId,
-              auth: this._auth
+              url: "https://api.twitter.com/1/direct_messages/sent.json?include_entities=1&count=100&since_id=" + s.dmSendId,
+              auth: this._auth,
+              headers: KEYS.twitterHeaders
             });
           }
         );
@@ -12409,9 +12385,10 @@ var TweetFetcher = xo.Class(Events,
     var config =
     {
       method: "GET",
-      url: "https://search.twitter.com/search.json?include_entities=true&rpp=100&q=" + 
+      url: "https://search.twitter.com/search.json?include_entities=1&include_cards=1&rpp=100&q=" + 
         encodeURIComponent(this._searchStatus.queries.join(" OR ")),
-      auth: this._auth
+      auth: this._auth,
+      headers: KEYS.twitterHeaders
     };
     return Co.Routine(this,
       function()
@@ -12887,7 +12864,7 @@ var Account = Class(Events,
       },
       function(hashtags)
       {
-        this._followingHashtags = hashtags();
+        hashtags = hashtags();
         this.preferences.on("hashtagsChange", function()
         {
           Co.Routine(this,
@@ -12926,7 +12903,7 @@ var Account = Class(Events,
             }
           );
         }, this);
-        this._followingHashtags.forEach(function(tag)
+        hashtags.forEach(function(tag)
         {
           this.followHashtag(tag);
         }, this);
@@ -12964,7 +12941,7 @@ var Account = Class(Events,
           self._fetcher.abortFetch();
           self._fetcher.stopSearch();
           self.fetch();
-          self._fetcher.startSearch();
+          self._fetcher.restartSearch();
         }
         function offline()
         {
@@ -13210,7 +13187,8 @@ var Account = Class(Events,
 
   unfollowHashtag: function(hashtag)
   {
-    var idx = this._followingHashtags.indexOf(hashtag.toLowerCase());
+    hashtag = hashtag.toLowerCase();
+    var idx = this._followingHashtags.indexOf(hashtag);
     if (idx !== -1)
     {
       this._followingHashtags.splice(idx, 1);
@@ -13221,9 +13199,13 @@ var Account = Class(Events,
 
   followHashtag: function(hashtag)
   {
-    this._followingHashtags.push(hashtag.toLowerCase());
-    this.addSearch("#" + hashtag);
-    this.preferences.setFollowedHashtags(this._followingHashtags);
+    hashtag = hashtag.toLowerCase();
+    if (this._followingHashtags.indexOf(hashtag) === -1)
+    {
+      this._followingHashtags.push(hashtag);
+      this.addSearch("#" + hashtag);
+      this.preferences.setFollowedHashtags(this._followingHashtags);
+    }
   },
 
   _addFollowedHashtags: function(tweets)
@@ -13489,7 +13471,7 @@ var UrlExpander = Class(Events,
               {
                 return "urls%5B%5D=" + escape(url)
               }).join("&"),
-              headers: KEYS.twitterResolve
+              headers: KEYS.twitterHeaders
             });
           },
           function(r)
@@ -13524,9 +13506,23 @@ var UrlExpander = Class(Events,
     if (url.indexOf("http://instagr.am/p/") === 0)
     {
       return {
-        url: url + "/media?size=m",
-        media_url: url + "/media?size=l",
-        type: "photo"
+        url: url,
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: url + "/media?size=m"
+              },
+              web:
+              {
+                image_url_2x: url + "/media?size=l"
+              }
+            }
+          }
+        ]
       };
     }
     // YouTube - No YouTube for now because iframes mess up the touch scolling in iOS 5.1 :-(
@@ -13546,26 +13542,68 @@ var UrlExpander = Class(Events,
       var v = new xo.Url(url).getParameter("v");
       return {
         url: url,
-        media_url: "http://img.youtube.com/vi/" + v + "/0.jpg",
-        type: "video"
-      }
+        videos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: "http://img.youtube.com/vi/" + v + "/0.jpg"
+              },
+              web:
+              {
+                image_url_2x: "http://img.youtube.com/vi/" + v + "/0.jpg"
+              }
+            }
+          }
+        ]
+      };
     }
     // Twitpic
     else if (url.indexOf("http://twitpic.com/") === 0)
     {
       return {
         url: url,
-        media_url: "http://twitpic.com/show/large/" + new xo.Url(url).pathname,
-        type: "photo"
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: "http://twitpic.com/show/thumb" + new xo.Url(url).pathname
+              },
+              web:
+              {
+                image_url_2x: "http://twitpic.com/show/large" + new xo.Url(url).pathname
+              }
+            }
+          }
+        ]
       };
     }
     // YFrog
     else if (url.indexOf("http://yfrog.com/") === 0)
     {
       return {
-        url: url + ":iphone",
-        media_url: url + ":medium",
-        type: "photo"
+        url: url,
+        photos:
+        [
+          {
+            images:
+            {
+              mobile:
+              {
+                image_url_2x: url + ":iphone"
+              },
+              web:
+              {
+                image_url_2x: url + ":medium"
+              }
+            }
+          }
+        ]
       };
     }
     else
@@ -13659,7 +13697,7 @@ var Composite =
       function()
       {
         var i = document.createElement("img");
-        i.src = Environment._networkProxyTransform(url);
+        i.src = url;//Environment._networkProxyTransform(url);
         if (i.complete)
         {
           return i;
@@ -14192,6 +14230,9 @@ new StorageGridProvider(
 );
 (function()
 {
+  var TITLE = "#article-entry-title,#rdb-article-title,.instapaper_title";
+  var BODY = "#rdb-article-content,.instapaper_body";
+
   var ReadabilityModel = Model.create(
   {
     title: Model.Property,
@@ -14245,8 +14286,8 @@ new StorageGridProvider(
             stage.innerHTML = text;
             model.delayUpdate(function()
             {
-              this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
-              this.text(stage.querySelector("#rdb-article-content").innerHTML);
+              this.title(stage.querySelector(TITLE).innerHTML);
+              this.text(stage.querySelector(BODY).innerHTML);
             });
             return;
           }
@@ -14292,8 +14333,8 @@ new StorageGridProvider(
               stage.innerHTML = text;
               model.delayUpdate(function()
               {
-                this.title(stage.querySelector("#article-entry-title,#rdb-article-title").innerHTML);
-                this.text(stage.querySelector("#rdb-article-content").innerHTML);
+                this.title(stage.querySelector(TITLE).innerHTML);
+                this.text(stage.querySelector(BODY).innerHTML);
               });
             }
           );
@@ -14519,7 +14560,7 @@ var TweetController = xo.Controller.create(
   onUrl: function(m, v, e)
   {
     this.metric("url:open");
-    var url = e.target.dataset.href;
+    var url = e.actionTarget.dataset.href;
 
     Co.Routine(this,
       function()
@@ -15170,6 +15211,41 @@ var AccountController = xo.Controller.create(
     });
   },
 });var __resources = {
+'basic_media': '{{#include_media}}\
+  {{#cards}}\
+    {{#first_photo}}\
+      {{#images}}\
+        <img class="photo" data-action-click="Image" data-href="{{web_url}}" src="{{mobile_url}}">\
+      {{/images}}\
+    {{/first_photo}}\
+    {{^first_photo}}\
+      {{#first_summary}}\
+        <div class="post-summary" data-action-click="Url" data-href="{{url}}">\
+          <div class="post-article">Summary</div>\
+          {{#images}}\
+            {{#mobile}}\
+              <img class="post-photo" src="{{image_url_2x}}">\
+            {{/mobile}}\
+          {{/images}}\
+          <div class="post-body{{#images}}{{^mobile}}no-media{{/mobile}}{{/images}}">\
+            <div class="title">{{title}}</div>\
+            <div class="description">{{description}}</div>\
+            {{#site_user}}\
+              <div class="post-site">\
+                <span class="name">{{name}}</span> <span class="screenname">@{{screen_name}}</span>\
+              </div>\
+            {{/site_user}}\
+          </div>\
+          <div class="post-end"></div>\
+        </div>\
+      {{/first_summary}}\
+    {{/first_photo}}\
+  {{/cards}}\
+{{/include_media}}\
+{{:first_photo}}var p = this.v(\'photos\') || this.v(\'videos\');return p && p[0]{{/first_photo}}\
+{{:first_summary}}var s = this.v(\'summaries\');return s && s[0]{{/first_summary}}\
+{{:mobile_url}}return this.v(\'mobile\').image_url_2x{{/mobile_url}}\
+{{:web_url}}return this.v(\'web\').image_url_2x{{/web_url}}',
 'basic_tweet': '{{#_ View}}\
 <div class="tweet"{{#has_children}} data-action-click="OpenTweet"{{/has_children}}>\
   {{#retweet}}\
@@ -15177,11 +15253,7 @@ var AccountController = xo.Controller.create(
     <div class="body">\
       <span class="fullname">{{name}}</span> <span class="screenname">@{{screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>\
       <div class="text">{{{entifiedText}}}</div>\
-      {{#include_media}}\
-        {{#embed_photo_url}}\
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">\
-        {{/embed_photo_url}}\
-      {{/include_media}}\
+      {{>basic_media}}\
     </div>\
   {{/retweet}}\
   {{^retweet}}\
@@ -15189,11 +15261,7 @@ var AccountController = xo.Controller.create(
     <div class="body">\
       <span class="fullname">{{conversation_name}}</span> <span class="screenname">@{{conversation_screen_name}}</span><span class="timestamp" data-timestamp="{{created_at}}">{{created_since}}</span>\
       <div class="text">{{{entifiedText}}}</div>\
-      {{#include_media}}\
-        {{#embed_photo_url}}\
-          <img class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" src="{{embed_photo_url_small}}">\
-        {{/embed_photo_url}}\
-      {{/include_media}}\
+      {{>basic_media}}\
     </div>\
   {{/retweet}}\
   {{#is_retweet}}\
@@ -15428,7 +15496,7 @@ var AccountController = xo.Controller.create(
           {{/viz_stack}}\
           {{#viz_media}}\
             {{#tweets ViewSet.TextFilter.LiveList name:"tweets" filterKeys:["text","at_screen_name","name","tagkeys"] }}\
-              {{>media}}\
+              {{>only_media}}\
             {{/tweets}}\
           {{/viz_media}}\
         {{/current_list}}\
@@ -15436,13 +15504,25 @@ var AccountController = xo.Controller.create(
     </div>\
   </div>\
 </div>',
-'media': '{{#embed_photo_url}}\
-  {{#_ View}}\
-    <div class="media-box">\
-      <div class="photo" data-action-click="Image" data-href="{{embed_photo_url}}" style="background-image: url(\'{{embed_photo_url_small}}\')"></div>\
-    </div>\
-  {{/_}}\
-{{/embed_photo_url}}',
+'only_media': '{{#_ View}}\
+  {{#cards}}\
+    {{#first_photo}}\
+      {{#images}}\
+        <div class="media-box">\
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url(\'{{mobile_url}}\')"></div>\
+        </div>\
+      {{/images}}\
+      {{#videos}}\
+        <div class="media-box">\
+          <div class="photo" data-action-click="Image" data-href="{{web_url}}" style="background-image: url(\'{{mobile_url}}\')"></div>\
+        </div>\
+      {{/videos}}\
+    {{/first_photo}}\
+  {{/cards}}\
+{{/_}}\
+{{:first_photo}}var p = this.v(\'photos\');return p && p[0]{{/first_photo}}\
+{{:mobile_url}}return this.v(\'mobile\').image_url_2x{{/mobile_url}}\
+{{:web_url}}return this.v(\'web\').image_url_2x{{/web_url}}',
 'readability': '<div class="dialog readability{{#show}} show{{/show}}" data-action-orientationchange="OrientationChange">\
   <div class="inner" id="readability-scroller" data-action-swipe-left="Forward" data-action-swipe-right="Backward" data-action-close="Close" data-action-click="IgnoreOrSwipe">\
     {{#title}}\
